@@ -1,0 +1,108 @@
+/* Global Container */
+.app-container {
+  padding: 24px;
+  background-color: #f0f2f5;
+  min-height: 100vh;
+}
+
+.content-wrapper {
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
+  padding: 20px;
+}
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  justify-content: flex-end; /* Right align */
+  margin-bottom: 20px; /* Spacing below */
+}
+
+/* Card Styling */
+.box-card {
+  border-radius: 8px; /* Changed from 16px to 8px */
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.box-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.header-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+  position: relative;
+  padding-left: 12px;
+}
+
+.header-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 16px;
+  background-color: #409EFF;
+  border-radius: 2px;
+}
+
+/* Filter Section */
+.filter-container {
+  padding-bottom: 24px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-item {
+  margin-right: 16px;
+  margin-bottom: 0;
+}
+
+/* Rounded Inputs */
+.rounded-input .el-input__wrapper,
+.rounded-input.el-select .el-input__wrapper {
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  padding-left: 15px;
+}
+
+.rounded-input .el-input__wrapper:hover,
+.rounded-input.el-select .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px #c0c4cc inset;
+}
+
+.rounded-input .el-input__wrapper.is-focus,
+.rounded-input.el-select .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px #409EFF inset !important;
+}
+
+/* Table Styling */
+.el-table {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.02);
+}
+
+.el-table th.el-table__cell {
+  background-color: #f5f7fa !important;
+  color: #606266;
+  font-weight: 600;
+  height: 50px;
+}
+
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: #fafafa;
+}
