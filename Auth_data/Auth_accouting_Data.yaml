@@ -1,0 +1,23 @@
+Mermaid'sPearl:
+  Mermaid'sPearl-进入游戏:
+    70050_Web_test_3.py:
+    - step_index: 0
+      step_name: 注册多个产品地址个人测试账号
+      operation_events: register
+      by_address:
+        https://h7055.slotcash666.com/:
+          email: yanglingzhen@slotcash666.com
+          password: 123456789
+        https://t50guide.slotcash666.com/:
+          email: yanglingzhen@slotcash777.com
+          password: 123456789
+        https://letsgogogold.com/:
+          email: ySSS@sSDSAA.com
+          password: 123456789
+    - step_index: 1
+      step_name: 注册单个个人测试账号
+      operation_events: register
+      by_address:
+        https://h7055.slotcash666.com/:
+          email: yanglingzhen@slotcash666.com
+          password: 123456789

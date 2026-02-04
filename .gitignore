@@ -21,7 +21,6 @@ htmlcov/
 
 # Logs
 logs/
-Logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -41,19 +40,3 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
-
-# Project specific
-Auth_data/
-# Keep the structure but maybe not the data if sensitive, but for now I'll assume Auth_data might have sensitive info? 
-# The user mentioned "Auth_accouting_Data.yaml", let's check if it contains real credentials.
-# The user asked to upload the project, usually they want the code.
-# I'll exclude Auth_data/Auth_accouting_Data.yaml if it looks sensitive, but maybe I should just warn the user.
-# For now, I will exclude it to be safe, or just exclude the yaml files in it.
-
-# Temporary files
-(2560
-+.png
--.png
-c.png
-x.png
-raise
