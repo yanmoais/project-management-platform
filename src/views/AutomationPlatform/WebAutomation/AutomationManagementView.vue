@@ -183,6 +183,8 @@ import CommonPagination from '@/components/CommonPagination.vue'
 
 import { getStatusType } from '@/utils/format'
 
+import { useUserStore } from '@/store/Auth/user'
+
 const loading = ref(false)
 const projectList = ref([])
 const groupedProjects = ref({})
@@ -508,9 +510,22 @@ const handleExecute = async (row) => {
     row.status = 'Running'
     pollingProjects.value.add(row.id)
     
+    // 获取当前用户信息 (优先从Pinia Store获取，其次localStorage，最后默认)
+    const userStore = useUserStore()
+    let username = userStore.name
+    console.log("当前用户信息:", userStore)
+    console.log("当前用户名:", username)
+    
+    if (!username) {
+        const localUser = JSON.parse(localStorage.getItem('user') || '{}')
+        username = localUser.username || 'admin'
+    }
+    
     // ElMessage.info(`开始执行: ${row.process_name}`)
     // Trigger execution API
-    const res = await axios.post(`/api/automation/management/test_projects/${row.id}/execute`)
+    const res = await axios.post(`/api/automation/management/test_projects/${row.id}/execute`, {
+      executed_by: username
+    })
     if (res.data.code === 200) {
       ElMessage.success(`开始执行: ${row.process_name}`)
       // 不刷新整个列表，仅保持轮询状态
@@ -533,9 +548,20 @@ const handleBatchExecute = (items) => {
      cancelButtonText: '取消'
   }).then(async () => {
      let successCount = 0
+     // 获取当前用户信息 (优先从Pinia Store获取，其次localStorage，最后默认)
+     const userStore = useUserStore()
+     let username = userStore.name
+     
+     if (!username) {
+         const localUser = JSON.parse(localStorage.getItem('user') || '{}')
+         username = localUser.username || 'admin'
+     }
+     
      for (const item of items) {
        try {
-         await axios.post(`/api/automation/management/test_projects/${item.id}/execute`)
+         await axios.post(`/api/automation/management/test_projects/${item.id}/execute`, {
+           executed_by: username
+         })
          successCount++
        } catch (e) {
          console.error(e)

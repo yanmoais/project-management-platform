@@ -55,6 +55,14 @@ export const useUserStore = defineStore('user', {
         this.name = name
         this.avatar = avatar
         this.permissions = permissions
+        
+        // Save to localStorage for persistence/access outside of Vue context if needed
+        localStorage.setItem('user', JSON.stringify({ 
+            username: name, 
+            avatar: avatar,
+            roles: this.roles 
+        }))
+        
         return res
       } catch (error) {
         return Promise.reject(error)

@@ -1,5 +1,5 @@
-﻿import { defineStore } from 'pinia'
-import { getEnvironmentList, addEnvironment, updateEnvironment, deleteEnvironment } from '@/api/TestEnvironment/TestEnvironmentView'
+import { defineStore } from 'pinia'
+import { getEnvironmentList, addEnvironment, updateEnvironment, deleteEnvironment, getEnvironmentLogs } from '@/api/TestEnvironment/TestEnvironmentView'
 
 export const useTestEnvironmentViewStore = defineStore('TestEnvironmentView', {
   state: () => ({
@@ -48,6 +48,15 @@ export const useTestEnvironmentViewStore = defineStore('TestEnvironmentView', {
             await deleteEnvironment(env_id)
         } catch (error) {
             console.error('Failed to delete environment:', error)
+            throw error
+        }
+    },
+    async fetchEnvironmentLogs(env_id) {
+        try {
+            const res = await getEnvironmentLogs(env_id)
+            return res
+        } catch (error) {
+            console.error('Failed to fetch environment logs:', error)
             throw error
         }
     }

@@ -24,8 +24,13 @@
         </el-table-column>
         <el-table-column prop="start_time" label="开始时间" />
         <el-table-column prop="end_time" label="结束时间" />
-        <el-table-column prop="executed_by" label="执行人" />
-        <el-table-column label="操作" width="120">
+        <el-table-column prop="process_name" label="流程名称" />
+        <el-table-column prop="executed_by" label="执行人" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.executed_by || 'admin' }}
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="120" fixed="right">
           <template #default="scope">
             <el-button size="small" type="primary" @click="viewLog(scope.row.id)">查看日志</el-button>
           </template>
@@ -78,7 +83,7 @@ const drawerVisible = ref(false)
 const executions = ref([])
 const loading = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const total = ref(0)
 
 // 日志视图 Log Viewer State

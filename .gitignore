@@ -21,6 +21,7 @@ htmlcov/
 
 # Logs
 logs/
+MD/*.md
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -40,3 +41,5 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+MD/RAG + Dify测试案例生成平台可行性方案.md
+MD/FastAPI_Migration_Plan.md

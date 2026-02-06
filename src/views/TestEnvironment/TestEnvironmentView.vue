@@ -123,8 +123,9 @@
         </el-table-column>
         <el-table-column label="操作" fixed="right" align="center">
           <template #default="{ row }">
-              <el-button type="primary" @click="handleEdit(row)">编辑</el-button>
-              <el-button type="danger"  @click="handleDelete(row)">删除</el-button>
+              <el-button link type="primary" @click="handleHistory(row)">查看历史</el-button>
+              <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
+              <el-button link type="danger"  @click="handleDelete(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -244,6 +245,13 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 历史记录弹窗 -->
+    <OperationHistoryDialog
+      v-model:visible="historyDialogVisible"
+      :logs="historyLogs"
+      :loading="historyLoading"
+    />
   </div>
 </template>
 
@@ -254,11 +262,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useTestEnvironmentViewStore } from '@/store/TestEnvironment/TestEnvironmentView'
 import { useUserStore } from '@/store/Auth/user'
 import CommonPagination from '@/components/CommonPagination.vue'
+import OperationHistoryDialog from '@/components/OperationHistoryDialog.vue'
 import '@/assets/css/TestEnvironment/TestEnvironmentView.css'
+import { useSysUserStore } from '../../store/SystemManager/UserView'
 
 const store = useTestEnvironmentViewStore()
 const userStore = useUserStore()
-const currentUser = computed(() => userStore.currentUser).value
+const currentUser = computed(() => userStore.currentUser)
 
 const loading = computed(() => store.loading)
 const environmentList = computed(() => store.environmentList)
@@ -326,6 +336,29 @@ const handleEdit = (row) => {
   dialogVisible.value = true
 }
 
+const historyDialogVisible = ref(false)
+const historyLogs = ref([])
+const historyLoading = ref(false)
+
+const handleHistory = async (row) => {
+  historyDialogVisible.value = true
+  historyLoading.value = true
+  try {
+    const res = await store.fetchEnvironmentLogs(row.env_id)
+    if (res && res.code === 200) {
+      historyLogs.value = res.data
+    } else {
+        // Fallback or empty
+        historyLogs.value = []
+    }
+  } catch (e) {
+    ElMessage.error('获取历史记录失败')
+    historyLogs.value = []
+  } finally {
+    historyLoading.value = false
+  }
+}
+
 const handleDelete = (row) => {
   ElMessageBox.confirm('确认删除该环境配置吗?', '警告', {
     confirmButtonText: '确定',
@@ -347,13 +380,14 @@ const submitForm = () => {
     if (valid) {
       try {
         if (form.env_id) {
-          const paylod = {...form, update_by: currentUser}
-          await store.modifyEnvironment(form)
-          ElMessage.success('更新成功')
+          const paylod = {...form, update_by: currentUser.value}
+          console.log('修改环境参数:', paylod)
+          await store.modifyEnvironment(paylod)
+          ElMessage.success('修改成功')
         } else {
-          const payload = { ...form, create_by: currentUser}
+          const payload = { ...form, create_by: currentUser.value}
           await store.createEnvironment(payload)
-          ElMessage.success('创建成功')
+          ElMessage.success('新增成功')
         }
         dialogVisible.value = false
         handleQuery()

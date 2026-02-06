@@ -88,6 +88,29 @@ class TestEnvironment(db.Model):
             'create_by': self.create_by
         }
 
+class TestEnvironmentLog(db.Model):
+    """
+    测试环境操作日志表 (test_environment_log)
+    用于记录测试环境新增/编辑操作记录
+    """
+    __tablename__ = 'test_environment_log'
+    log_id = db.Column(db.BigInteger, primary_key=True, autoincrement=True, comment='日志ID')
+    env_id = db.Column(db.BigInteger, nullable=False, comment='关联测试环境ID')
+    username = db.Column(db.String(30), nullable=False, comment='操作用户名')
+    operation_type = db.Column(db.String(20), nullable=False, comment='操作类型(新增/编辑)')
+    change_content = db.Column(db.Text, nullable=False, comment='变更内容')
+    operation_time = db.Column(db.DateTime, default=datetime.now, comment='操作时间')
+
+    def to_dict(self):
+        return {
+            'log_id': self.log_id,
+            'env_id': self.env_id,
+            'username': self.username,
+            'operation_type': self.operation_type,
+            'change_content': self.change_content,
+            'operation_time': self.operation_time.strftime('%Y-%m-%d %H:%M:%S') if self.operation_time else None
+        }
+
 class Project(db.Model):
     """
     产品表 (projects)

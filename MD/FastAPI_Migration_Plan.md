@@ -133,16 +133,74 @@ async def get_db() -> AsyncGenerator:
 
 ## 5. 阶段四：功能模块迁移策略 (Phase 4: Module Migration)
 
-### 5.1 模块映射表
-| Flask Blueprint | FastAPI Router Tag | 优先级 | 备注 |
-|-----------------|--------------------|--------|------|
-| Auth            | `auth`             | P0     | 基础依赖 |
-| SystemManager   | `system`           | P1     | 用户/角色/菜单管理 |
-| WebAutomation   | `automation`       | P0     | 核心业务，涉及 Playwright |
-| ProjectMgt      | `project`          | P1     | 项目管理 |
-| Workbench       | `workbench`        | P2     | 仪表盘 |
+### 5.1 完整模块映射表 (Full Module Mapping)
+基于 `backend/app.py` 的实际蓝图注册情况，需迁移以下所有模块：
 
-### 5.2 自动化测试模块 (Automation Module) 重点改造
+| 领域 (Domain) | Flask Blueprint | FastAPI Router Tag | 优先级 | 说明 |
+|---|---|---|---|---|
+| **基础服务** | `auth_bp` | `auth` | **P0** | 认证与授权 |
+| | `sys_user_bp` 等 6个 | `system` | **P0** | 用户/角色/菜单/部门/岗位/公告 |
+| **自动化核心** | `web_automation_bp` | `automation` | **P0** | Web自动化执行核心 |
+| | `product_management_bp` | `automation-product` | P1 | 产品/项目配置 |
+| | `automation_management_bp` | `automation-mgmt` | P1 | 任务管理 |
+| **研发管理** | `project_bp` | `project` | P1 | 项目立项与管理 |
+| | `requirement_bp` | `requirement` | P1 | 需求管理 |
+| | `development_bp` | `development` | P1 | 开发任务 |
+| | `workbench_bp` | `workbench` | P2 | 工作台概览 |
+| | `my_space_bp` | `myspace` | P2 | 个人空间 |
+| **质量与测试** | `quality_bp` | `quality` | P1 | 质量管理 |
+| | `issue_bp` | `issue` | P1 | 生产问题/Bug |
+| | `uat_bp` | `uat` | P2 | 用户验收测试 |
+| | `environment_bp` | `environment` | P2 | 测试环境管理 |
+| **运维与交付** | `deployment_bp` | `deployment` | P2 | 转测/部署 |
+| | `production_bp` | `production` | P2 | 生产发布管理 |
+| **报表** | `report_bp` | `report` | P3 | 统计报表 |
+
+### 5.2 关键性能优化：阻塞代码处理 (Blocking Code Handling)
+**风险提示**：`backend/utils/image_recognition.py` (OpenCV, EasyOCR) 和 `captcha_solver.py` 包含大量 CPU 密集型同步代码。若在 `async def` 中直接调用，将**阻塞主线程**。
+
+**解决方案**：
+1. **使用 `run_in_threadpool`**：
+   ```python
+   from fastapi.concurrency import run_in_threadpool
+   from app.utils.image_recognition import ImageRecognition
+
+   @router.post("/recognize")
+   async def recognize_image(file: UploadFile):
+       # 将同步的 CPU 密集型任务放入线程池
+       result = await run_in_threadpool(ImageRecognition().process, file.file)
+       return result
+   ```
+2. **定义为同步路由**：对于纯计算接口，可直接定义为 `def` (非 async)，FastAPI 会自动放入线程池，但推荐方案 1 以保持代码风格统一。
+
+### 5.3 静态资源与文件上传
+原 Flask 项目利用了 `static/uploads` 目录。FastAPI 需显式挂载：
+
+```python
+# app/main.py
+from fastapi.staticfiles import StaticFiles
+
+# 确保目录存在
+os.makedirs("backend/static/uploads", exist_ok=True)
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+```
+
+### 5.4 跨域配置 (CORS)
+替代 `Flask-Cors`，在 `app/main.py` 中配置：
+
+```python
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 生产环境建议指定具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+### 5.5 自动化测试模块 (Automation Module) 重点改造
 此模块涉及 `Playwright` 和 `Celery`，是迁移的重难点。
 
 - **现状**: 使用 `TestCodeGenerator.py` 生成代码，通过 `subprocess` 调用 `pytest`。

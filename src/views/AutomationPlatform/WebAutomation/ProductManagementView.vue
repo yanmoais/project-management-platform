@@ -256,29 +256,13 @@
         </span>
       </template>
     </el-dialog>
-    <!-- History Dialog -->
-    <el-dialog
-      title="操作记录"
-      v-model="historyDialogVisible"
-      width="800px"
-    >
-      <el-table :data="historyLogs" v-loading="historyLoading" border style="width: 100%">
-        <el-table-column type="index" label="序号" width="80" />
-        <el-table-column prop="username" label="操作人" width="120" />
-        <el-table-column prop="operation_type" label="操作类型" width="100">
-          <template #default="{ row }">
-            <el-tag :type="row.operation_type === '新增' ? 'success' : 'warning'">{{ row.operation_type }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="change_content" label="变更内容" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="operation_time" label="操作时间" width="180" />
-      </el-table>
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="historyDialogVisible = false">关闭</el-button>
-        </span>
-      </template>
-    </el-dialog>
+
+    <!-- 历史记录弹窗 -->
+    <OperationHistoryDialog
+      v-model:visible="historyDialogVisible"
+      :logs="historyLogs"
+      :loading="historyLoading"
+    />
   </div>
 </template>
 
@@ -298,6 +282,7 @@ import {
   getProjectOptions
 } from '@/api/AutomationPlatform/WebAutomation/ProductManagement'
 import CommonPagination from '@/components/CommonPagination.vue'
+import OperationHistoryDialog from '@/components/OperationHistoryDialog.vue'
 
 const loading = ref(false)
 const tableData = ref([])

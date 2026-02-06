@@ -877,6 +877,12 @@ def execute_project(project_id):
             log_info(f"项目不存在: project_id={project_id}")
             return jsonify({'code': 404, 'message': '项目未找到'}), 404
             
+        # 优先使用前端传来的 executed_by，如果没传则尝试从 Token 获取，最后回退到 admin
+        data = request.get_json() or {}
+        executed_by = data.get('executed_by')
+        if not executed_by:
+            executed_by = "admin"
+
         # Create execution record
         execution = AutomationExecution(
             project_id=project.id,
@@ -888,9 +894,9 @@ def execute_project(project_id):
             product_address=project.product_address,
             status='Running',
             start_time=datetime.now(),
-            executed_by='admin', # Should get from user session
+            executed_by=executed_by,
             log_message='正在执行',
-            detailed_log=f"收到项目执行请求: project_id={project_id}\n"
+            detailed_log=f"收到项目执行请求: project_id={project_id}, 执行人={executed_by}\n"
         )
         
         db.session.add(execution)

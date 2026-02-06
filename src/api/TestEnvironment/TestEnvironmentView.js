@@ -30,3 +30,10 @@ export function deleteEnvironment(env_id) {
     method: 'delete'
   })
 }
+
+export function getEnvironmentLogs(env_id) {
+  return request({
+    url: `/api/environment/logs/${env_id}`,
+    method: 'get'
+  })
+}
