@@ -80,15 +80,15 @@ app.include_router(ProductManagement_Router.router, prefix="/api/automation/prod
 app.include_router(AutomationManagement_Router.router, prefix="/api/automation/management")
 
 # 接口自动化路由
-app.include_router(InterfaceProject_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceCase_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceTest_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceApi_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceReport_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceDocument_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceMethod_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceAssertion_Router, prefix="/api/automation/interface")
-app.include_router(InterfaceConfig_Router, prefix="/api/automation/interface")
+app.include_router(InterfaceProject_Router, prefix="/api/automation/interface/project")
+app.include_router(InterfaceCase_Router, prefix="/api/automation/interface/case")
+app.include_router(InterfaceTest_Router, prefix="/api/automation/interface/test")
+app.include_router(InterfaceApi_Router, prefix="/api/automation/interface/api")
+app.include_router(InterfaceReport_Router, prefix="/api/automation/interface/report")
+app.include_router(InterfaceDocument_Router, prefix="/api/automation/interface/document")
+app.include_router(InterfaceMethod_Router, prefix="/api/automation/interface/method")
+app.include_router(InterfaceAssertion_Router, prefix="/api/automation/interface/assertion")
+app.include_router(InterfaceConfig_Router, prefix="/api/automation/interface/config")
 
 # 系统管理路由
 app.include_router(SysUser_Router.router, prefix="/api/system/user")
