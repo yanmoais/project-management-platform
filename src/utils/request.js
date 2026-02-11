@@ -36,7 +36,7 @@ service.interceptors.response.use(
         });
     }
 
-    // Adjust based on your backend response structure
+    // Adjust based on your backend_fastapi response structure
     // If backend returns code/msg/data
     if (res.code && res.code !== 200) {
       ElMessage({

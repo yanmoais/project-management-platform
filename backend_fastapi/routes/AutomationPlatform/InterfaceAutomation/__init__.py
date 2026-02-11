@@ -1,0 +1,9 @@
+from .ProjectManagement_Router import router as ProjectManagement_Router
+from .CaseManagement_Router import router as CaseManagement_Router
+from .TestManagement_Router import router as TestManagement_Router
+from .ApiManagement_Router import router as ApiManagement_Router
+from .TestReport_Router import router as TestReport_Router
+from .DocumentManagement_Router import router as DocumentManagement_Router
+from .CommonMethods_Router import router as CommonMethods_Router
+from .AssertionTemplates_Router import router as AssertionTemplates_Router
+from .CommonConfig_Router import router as CommonConfig_Router

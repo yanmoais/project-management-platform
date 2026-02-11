@@ -9,7 +9,7 @@ logger = logging.getLogger("验证测试")
 # 添加项目根目录到 path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from backend.utils.captcha_solver import CaptchaSolver
+from backend_fastapi.utils.captcha_solver import CaptchaSolver
 
 def test_captcha_files():
     solver = CaptchaSolver("test_task")

@@ -61,7 +61,7 @@ backend_fastapi/
 
 ## 3. 阶段二：数据库层改造 (Phase 2: Database Layer)
 
-### 3.1 异步引擎配置
+### 3.1 异步引擎配置 (Async Engine)
 由于项目使用了双数据库（`project_management_platform` 和 `automation`），需配置多个异步引擎。
 
 ```python
@@ -128,7 +128,7 @@ async def get_db() -> AsyncGenerator:
       # ... 生成 token
   ```
 
-### 4.2 配置管理 (Configuration)
+### 4.2 配置管理 (Configuration Management)
 使用 `pydantic-settings` 替换 `backend/config.py`，支持从 `.env` 文件读取配置。
 
 ## 5. 阶段四：功能模块迁移策略 (Phase 4: Module Migration)
@@ -173,7 +173,7 @@ async def get_db() -> AsyncGenerator:
    ```
 2. **定义为同步路由**：对于纯计算接口，可直接定义为 `def` (非 async)，FastAPI 会自动放入线程池，但推荐方案 1 以保持代码风格统一。
 
-### 5.3 静态资源与文件上传
+### 5.3 静态资源与文件上传 (Static Files and Uploads)
 原 Flask 项目利用了 `static/uploads` 目录。FastAPI 需显式挂载：
 
 ```python
@@ -208,7 +208,7 @@ app.add_middleware(
   - 短期：保持 `subprocess` 调用方式，利用 FastAPI 的异步特性，避免阻塞主线程。
   - 长期：直接集成 `async-playwright` 到 FastAPI 的 `BackgroundTasks` 或 Celery 任务中，减少进程开销。
 
-### 5.3 Celery 集成
+### 5.3 Celery 集成 (Celery Integration)
 FastAPI 与 Celery 的集成比 Flask 更松耦合。
 - **Worker**: 保持独立的 `worker` 进程。
 - **Producer**: 在 FastAPI 路由中直接调用 `task.delay()`。
@@ -239,7 +239,11 @@ FastAPI 与 Celery 的集成比 Flask 更松耦合。
 ## 7. 常见问题与风险 (Risks & FAQ)
 
 - **Q: 现有的同步工具类（如 `UitilTools.py`）怎么办？**
-  - A: 如果是纯 CPU 密集型操作（字符串处理、正则），可直接复用。如果是 I/O 操作（文件读写），建议改写为异步版本 (`aiofiles`) 或在 `run_in_threadpool` 中运行。
+  - A: 结合 `backend/utils/UitilTools.py` 的实际实现，该文件主要是字符串解析、正则匹配、HTML 拼接等同步 CPU 计算，不涉及数据库或网络 I/O，可继续保持同步实现。迁移到 FastAPI 后建议：
+    1. **路由层线程池包装**：在 `async def` 路由中使用 `run_in_threadpool` 调用同步方法，避免阻塞事件循环。
+    2. **批量/大日志任务使用 Celery**：对长日志或批量处理场景，使用 Celery 任务异步生成解析结果或 HTML。
+    3. **优先返回结构化 JSON**：推荐服务端返回结构化解析结果，前端使用 Element Plus 组件渲染；如果必须返回 HTML，建议使用纯原生标签，避免 `v-html` 无法编译组件的问题。
+    4. **性能优化**：对高频正则进行预编译，减少逐行重复匹配开销。
 
 - **Q: 数据库迁移数据会丢失吗？**
   - A: 不会。我们只改变代码层的 ORM 访问方式，底层 MySQL 数据库结构保持不变。

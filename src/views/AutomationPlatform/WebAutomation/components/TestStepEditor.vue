@@ -46,289 +46,196 @@
 
           <!-- 步骤内容 -->
           <div class="step-card-body">
-            <!-- Web操作 布局 -->
-            <template v-if="step.operation_type === 'web'">
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="步骤名称" required>
-                    <el-input v-model="step.step_name" placeholder="请输入步骤名称" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="操作类型" required>
-                    <el-select v-model="step.operation_type" placeholder="请选择操作类型" @change="handleTypeChange(step)">
-                      <el-option label="Web操作" value="web" />
-                      <el-option label="游戏操作" value="game" />
+            <!-- 统一布局 -->
+            <el-row :gutter="20">
+              <!-- 第一行：基础信息 -->
+              <el-col :span="6">
+                <el-form-item label="步骤名称" required>
+                  <el-input v-model="step.step_name" placeholder="请输入步骤名称" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="操作类型" required>
+                  <el-select v-model="step.operation_type" placeholder="请选择操作类型" @change="handleTypeChange(step)">
+                    <el-option label="Web操作" value="web" />
+                    <el-option label="游戏操作" value="game" />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+
+              <!-- Web操作特有：操作事件 -->
+              <el-col :span="6" v-if="step.operation_type === 'web'">
+                <el-form-item label="操作事件" required>
+                  <div class="input-with-config">
+                    <el-select v-model="step.operation_event" placeholder="请选择操作事件" filterable @change="handleOperationEventChange(step)">
+                      <el-option-group v-for="group in operationEvents" :key="group.label" :label="group.label">
+                        <el-option
+                          v-for="item in group.options"
+                          :key="item.value"
+                          :label="item.label"
+                          :value="item.value"
+                        />
+                      </el-option-group>
                     </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="操作事件" required>
-                    <div class="input-with-config">
-                      <el-select v-model="step.operation_event" placeholder="请选择操作事件" filterable @change="handleOperationEventChange(step)">
-                        <el-option-group v-for="group in operationEvents" :key="group.label" :label="group.label">
-                          <el-option
-                            v-for="item in group.options"
-                            :key="item.value"
-                            :label="item.label"
-                            :value="item.value"
-                          />
-                        </el-option-group>
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :disabled="!isActionConfigurable(step.operation_event)"
-                        @click="openConfigDialog(step, 'action')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6" v-if="!isActionConfigurable(step.operation_event)">
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :disabled="!isActionConfigurable(step.operation_event)"
+                      @click="openConfigDialog(step, 'action')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+
+              <!-- Web操作特有：元素定位参数 或 验证码配置 -->
+              <el-col :span="6" v-if="step.operation_type === 'web' && !isActionConfigurable(step.operation_event)">
+                <template v-if="step.operation_event !== 'solve_captcha'">
                   <el-form-item label="元素定位参数" required>
                     <el-input v-model="step.operation_params" :placeholder="getParamsPlaceholder(step.operation_event)" />
                   </el-form-item>
-                </el-col>
-              </el-row>
-
-              <!-- 动态输入值参数 (仅特定事件显示) -->
-              <el-row :gutter="20" v-if="isInputValueVisible(step.operation_event)">
-                <el-col :span="step.operation_event === 'solve_captcha' ? 18 : 24">
-                  <el-form-item label="操作参数值" required>
-                    <el-input 
-                      v-model="step.input_value" 
-                      :placeholder="getInputValuePlaceholder(step.operation_event)" 
-                    />
+                </template>
+                <template v-else>
+                  <el-form-item label="验证码配置" required>
+                    <el-button 
+                      :icon="Setting" 
+                      type="primary"
+                      @click="openConfigDialog(step, 'captcha')"
+                      style="width: 100%"
+                    >验证码及登录参数</el-button>
                   </el-form-item>
-                </el-col>
+                </template>
+              </el-col>
 
-                <!-- 验证码重试配置 (仅验证码识别事件显示，且与操作参数值同行) -->
-                <el-col :span="6" v-if="step.operation_event === 'solve_captcha'">
-                  <el-form-item label="是否重试验证码">
-                    <el-select v-model="step.captcha_retry_enabled" placeholder="请选择">
+              <!-- 游戏操作特有：步骤图片 -->
+              <el-col :span="6" v-if="step.operation_type === 'game'">
+                <el-form-item label="步骤图片" required>
+                  <el-upload
+                    action="#"
+                    :auto-upload="false"
+                    :show-file-list="false"
+                    @change="(file) => handleImageUpload(step, file)"
+                  >
+                    <el-button type="primary" :icon="Upload">上传步骤图片</el-button>
+                  </el-upload>
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <!-- 动态输入值参数 (仅Web特定事件显示) -->
+            <el-row :gutter="20" v-if="step.operation_type === 'web' && isInputValueVisible(step.operation_event)">
+              <el-col :span="24">
+                <el-form-item label="操作参数值" required>
+                  <el-input 
+                    v-model="step.input_value" 
+                    :placeholder="getInputValuePlaceholder(step.operation_event)" 
+                  />
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <!-- 通用设置行 -->
+            <el-row :gutter="20">
+              <el-col :span="6">
+                <el-form-item label="操作次数">
+                  <el-input-number v-model="step.operation_count" :min="1" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="暂停时间(秒)">
+                  <el-input-number v-model="step.pause_time" :min="0" style="width: 100%" />
+                </el-form-item>
+              </el-col>
+              <!-- Web特有：标签页跳转 -->
+              <el-col :span="6" v-if="step.operation_type === 'web'">
+                <el-form-item label="标签页跳转">
+                  <div class="input-with-config">
+                    <el-select v-model="step.tab_switch_enabled" placeholder="请选择">
                       <el-option label="是" value="yes" />
                       <el-option label="否" value="no" />
                     </el-select>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="操作次数">
-                    <el-input v-model="step.operation_count" :min="1" style="width: 100%" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="暂停时间(秒)">
-                    <el-input v-model="step.pause_time" :min="0" style="width: 100%" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="标签页跳转">
-                    <div class="input-with-config">
-                      <el-select v-model="step.tab_switch_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.tab_switch_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.tab_switch_enabled === 'no'"
-                        @click="openConfigDialog(step, 'tab_switch')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="断言设置">
-                    <div class="input-with-config">
-                      <el-select v-model="step.assertion_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.assertion_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.assertion_enabled === 'no'"
-                        @click="openConfigDialog(step, 'assertion')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="截图设置">
-                    <div class="input-with-config">
-                      <el-select v-model="step.screenshot_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.screenshot_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.screenshot_enabled === 'no'"
-                        @click="openConfigDialog(step, 'screenshot')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="遮挡物处理">
-                    <div class="input-with-config">
-                      <el-select v-model="step.blocker_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.blocker_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.blocker_enabled === 'no'"
-                        @click="openConfigDialog(step, 'obstruction')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="无图片遮挡物开启">
-                    <div class="input-with-config">
-                      <el-select v-model="step.no_image_click_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.no_image_click_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.no_image_click_enabled === 'no'"
-                        @click="openConfigDialog(step, 'no_img_obstruction')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-            </template>
-
-            <!-- 游戏操作 布局 -->
-            <template v-else>
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="步骤名称" required>
-                    <el-input v-model="step.step_name" placeholder="请输入步骤名称" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="操作类型" required>
-                    <el-select v-model="step.operation_type" placeholder="请选择操作类型" @change="handleTypeChange(step)">
-                      <el-option label="Web操作" value="web" />
-                      <el-option label="游戏操作" value="game" />
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :type="step.tab_switch_enabled === 'yes' ? 'primary' : ''"
+                      :disabled="step.tab_switch_enabled === 'no'"
+                      @click="openConfigDialog(step, 'tab_switch')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="断言设置">
+                  <div class="input-with-config">
+                    <el-select v-model="step.assertion_enabled" placeholder="请选择">
+                      <el-option label="是" value="yes" />
+                      <el-option label="否" value="no" />
                     </el-select>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="步骤图片" required>
-                    <el-upload
-                      action="#"
-                      :auto-upload="false"
-                      :show-file-list="false"
-                      @change="(file) => handleImageUpload(step, file)"
-                    >
-                      <el-button type="primary" :icon="Upload">上传步骤图片</el-button>
-                    </el-upload>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="操作次数">
-                    <el-input-number v-model="step.operation_count" :min="1" style="width: 100%" />
-                  </el-form-item>
-                </el-col>
-              </el-row>
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :type="step.assertion_enabled === 'yes' ? 'primary' : ''"
+                      :disabled="step.assertion_enabled === 'no'"
+                      @click="openConfigDialog(step, 'assertion')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+            </el-row>
 
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="暂停时间(秒)">
-                    <el-input-number v-model="step.pause_time" :min="0" style="width: 100%" />
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="断言设置">
-                    <div class="input-with-config">
-                      <el-select v-model="step.assertion_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.assertion_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.assertion_enabled === 'no'"
-                        @click="openConfigDialog(step, 'assertion')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="截图设置">
-                    <div class="input-with-config">
-                      <el-select v-model="step.screenshot_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.screenshot_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.screenshot_enabled === 'no'"
-                        @click="openConfigDialog(step, 'screenshot')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-                <el-col :span="6">
-                  <el-form-item label="遮挡物处理">
-                    <div class="input-with-config">
-                      <el-select v-model="step.blocker_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.blocker_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.blocker_enabled === 'no'"
-                        @click="openConfigDialog(step, 'obstruction')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-
-              <el-row :gutter="20">
-                <el-col :span="6">
-                  <el-form-item label="无图片遮挡物开启">
-                    <div class="input-with-config">
-                      <el-select v-model="step.no_image_click_enabled" placeholder="请选择">
-                        <el-option label="是" value="yes" />
-                        <el-option label="否" value="no" />
-                      </el-select>
-                      <el-button 
-                        :icon="Setting" 
-                        class="config-btn"
-                        :type="step.no_image_click_enabled === 'yes' ? 'primary' : ''"
-                        :disabled="step.no_image_click_enabled === 'no'"
-                        @click="openConfigDialog(step, 'no_img_obstruction')"
-                      >配置</el-button>
-                    </div>
-                  </el-form-item>
-                </el-col>
-              </el-row>
-            </template>
+            <!-- 高级设置行 -->
+            <el-row :gutter="20">
+              <el-col :span="6">
+                <el-form-item label="截图设置">
+                  <div class="input-with-config">
+                    <el-select v-model="step.screenshot_enabled" placeholder="请选择">
+                      <el-option label="是" value="yes" />
+                      <el-option label="否" value="no" />
+                    </el-select>
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :type="step.screenshot_enabled === 'yes' ? 'primary' : ''"
+                      :disabled="step.screenshot_enabled === 'no'"
+                      @click="openConfigDialog(step, 'screenshot')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="遮挡物处理">
+                  <div class="input-with-config">
+                    <el-select v-model="step.blocker_enabled" placeholder="请选择">
+                      <el-option label="是" value="yes" />
+                      <el-option label="否" value="no" />
+                    </el-select>
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :type="step.blocker_enabled === 'yes' ? 'primary' : ''"
+                      :disabled="step.blocker_enabled === 'no'"
+                      @click="openConfigDialog(step, 'obstruction')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+              <el-col :span="6">
+                <el-form-item label="无图片遮挡物开启">
+                  <div class="input-with-config">
+                    <el-select v-model="step.no_image_click_enabled" placeholder="请选择">
+                      <el-option label="是" value="yes" />
+                      <el-option label="否" value="no" />
+                    </el-select>
+                    <el-button 
+                      :icon="Setting" 
+                      class="config-btn"
+                      :type="step.no_image_click_enabled === 'yes' ? 'primary' : ''"
+                      :disabled="step.no_image_click_enabled === 'no'"
+                      @click="openConfigDialog(step, 'no_img_obstruction')"
+                    >配置</el-button>
+                  </div>
+                </el-form-item>
+              </el-col>
+            </el-row>
           </div>
         </el-card>
         
@@ -348,71 +255,44 @@
       </template>
       
       <div class="dialog-content-wrapper">
-        <div v-if="currentConfigStep && ['login', 'register'].includes(currentConfigStep.operation_event) && configDialogTitle === '登录/注册配置'">
-          <el-form label-position="top">
-            <el-row :gutter="20">
-              <el-col :span="6">
-                <el-form-item label="邮箱/账号元素定位参数" required>
-                  <el-input v-model="currentConfigStep.login_register_config.email_locator" placeholder="请输入邮箱元素 (如: id=email)" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="密码元素定位参数" required>
-                  <el-input v-model="currentConfigStep.login_register_config.password_locator" placeholder="请输入密码元素 (如: id=password)" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="重复密码元素定位参数 (可选)">
-                  <el-input v-model="currentConfigStep.login_register_config.repeat_password_locator" placeholder="请输入重复密码元素 (如: id=repeat_password)" />
-                </el-form-item>
-              </el-col>
-              <el-col :span="6">
-                <el-form-item label="提交按钮元素定位参数" required>
-                    <el-input v-model="currentConfigStep.login_register_config.submit_button_locator" placeholder="请输入提交按钮元素 (如: id=submit)" />
-                </el-form-item>
-              </el-col>
-            </el-row>
-          </el-form>
+        <LoginRegisterConfig 
+          v-if="currentConfigStep && ['login', 'register'].includes(currentConfigStep.operation_event) && configDialogTitle === '登录/注册配置'"
+          v-model="currentConfigStep.login_register_config"
+          :products-info="productsInfo"
+          :operation-event="currentConfigStep.operation_event"
+        />
 
-          <div class="section-title">产品地址与账号</div>
-          <div class="product-account-card">
-            <el-row class="mb-10">
-                <el-col :span="24">
-                  <div class="input-vertical-group">
-                      <div class="label-row">
-                        <el-icon class="icon"><LinkIcon /></el-icon>
-                        <span class="label">地址</span>
-                      </div>
-                      <el-input v-model="currentConfigStep.login_register_config.address_url" placeholder="请输入产品地址" />
-                  </div>
-                </el-col>
-            </el-row>
-              <el-row :gutter="20">
-                <el-col :span="12">
-                    <div class="input-vertical-group">
-                      <div class="label-row">
-                        <el-icon class="icon"><Message /></el-icon>
-                        <span class="label">邮箱/账号</span>
-                      </div>
-                      <el-input v-model="currentConfigStep.login_register_config.account" placeholder="请输入邮箱或账号" />
-                    </div>
-                </el-col>
-                <el-col :span="12">
-                    <div class="input-vertical-group">
-                      <div class="label-row">
-                        <el-icon class="icon"><Lock /></el-icon>
-                        <span class="label">密码</span>
-                      </div>
-                      <el-input v-model="currentConfigStep.login_register_config.password" placeholder="请输入密码" />
-                    </div>
-                </el-col>
-              </el-row>
-          </div>
-          <p class="hint-text">每个产品地址下配置邮箱账号与密码。
-            <span v-if="currentConfigStep.operation_event === 'register'">注册时会自动分配唯一邮箱，密码默认 123456789。</span>
-            <span v-else>登录时将从历史数据(YAML)自动填充已有的账号密码，若未找到则为空。</span>
-          </p>
-        </div>
+        <AssertionConfig
+          v-else-if="currentConfigType === 'assertion'"
+          v-model="currentConfigStep.assertion_config"
+          @edit-status-change="handleAssertionEditStatusChange"
+        />
+
+        <ScreenshotConfig
+          v-else-if="currentConfigType === 'screenshot'"
+          v-model="currentConfigStep.screenshot_config"
+        />
+
+        <TabSwitchConfig
+          v-else-if="currentConfigType === 'tab_switch'"
+          v-model="currentConfigStep"
+          :steps="steps"
+        />
+
+        <ObstructionConfig
+          v-else-if="currentConfigType === 'obstruction'"
+          v-model="currentConfigStep"
+        />
+
+        <NoImgObstructionConfig
+          v-else-if="currentConfigType === 'no_img_obstruction'"
+          v-model="currentConfigStep"
+        />
+
+        <CaptchaConfig
+          v-else-if="currentConfigType === 'captcha'"
+          v-model="currentConfigStep"
+        />
 
         <div v-else class="config-placeholder">
           <p>正在开发中：针对 <strong>{{ currentConfigStep?.name }}</strong> 的 <strong>{{ configDialogTitle }}</strong> 配置功能。</p>
@@ -420,7 +300,7 @@
         </div>
       </div>
 
-      <template #footer>
+      <template #footer v-if="!isChildEditing">
         <el-button @click="configDialogVisible = false">关闭</el-button>
         <el-button type="primary" @click="saveConfig">保存配置</el-button>
       </template>
@@ -429,14 +309,24 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import axios from 'axios'
 import { 
   List, Plus, Download, Document, Delete, 
   Rank, Top, Bottom, Setting, Upload, CopyDocument,
-  Message, Lock, Link as LinkIcon
+  Message, Lock, Link as LinkIcon, InfoFilled,
+  Monitor, Picture, Cpu, UploadFilled
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+// Import Config Components
+import LoginRegisterConfig from './TestStepConfigs/LoginRegisterConfig.vue'
+import AssertionConfig from './TestStepConfigs/AssertionConfig.vue'
+import ScreenshotConfig from './TestStepConfigs/ScreenshotConfig.vue'
+import TabSwitchConfig from './TestStepConfigs/TabSwitchConfig.vue'
+import ObstructionConfig from './TestStepConfigs/ObstructionConfig.vue'
+import NoImgObstructionConfig from './TestStepConfigs/NoImgObstructionConfig.vue'
+import CaptchaConfig from './TestStepConfigs/CaptchaConfig.vue'
 
 const props = defineProps({
   modelValue: {
@@ -454,9 +344,70 @@ const emit = defineEmits(['update:modelValue'])
 const steps = ref([])
 const configDialogVisible = ref(false)
 const configDialogTitle = ref('')
+const currentConfigType = ref('')
 const currentConfigStep = ref(null)
 const stepRefs = ref({})
 const highlightedStepId = ref(null)
+const isChildEditing = ref(false)
+
+const handleAssertionEditStatusChange = (isEditing) => {
+  isChildEditing.value = isEditing
+}
+
+
+
+const tabNavigationSteps = computed(() => {
+  if (!currentConfigStep.value) return { steps: [], targetIndex: 2 }
+  
+  const navSteps = []
+  let currentTabIndex = 1
+  
+  // Add Base Step
+  navSteps.push({
+    name: '产品地址',
+    index: currentTabIndex,
+    isCurrent: false,
+    isJump: false
+  })
+  
+  const currentIndex = steps.value.indexOf(currentConfigStep.value)
+  if (currentIndex === -1) return { steps: navSteps, targetIndex: 2 }
+  
+  // Iterate up to current step
+  for (let i = 0; i <= currentIndex; i++) {
+    const step = steps.value[i]
+    // If it's a previous step and has jump enabled, it increments tab index
+    if (i < currentIndex && step.tab_switch_enabled === 'yes') {
+      currentTabIndex++
+      const isTemp = step.tab_switch_mode === 'temporary'
+      navSteps.push({
+        name: `测试步骤 ${i + 1}${isTemp ? ' (临时)' : ''}`,
+        index: currentTabIndex,
+        isCurrent: false,
+        isJump: true,
+        isTemporary: isTemp
+      })
+    }
+    
+    // If it's the current step (the one being configured), we assume it WILL jump if configured
+    if (i === currentIndex) {
+      currentTabIndex++ // The jump target for current step
+      const isTemp = currentConfigStep.value.tab_switch_mode === 'temporary'
+      navSteps.push({
+        name: `测试步骤 ${i + 1}${isTemp ? ' (临时)' : ''}`,
+        index: currentTabIndex,
+        isCurrent: true,
+        isJump: true,
+        isTemporary: isTemp
+      })
+    }
+  }
+  
+  return {
+    steps: navSteps,
+    targetIndex: currentTabIndex
+  }
+})
 
 const setStepRef = (el, id) => {
   if (el) {
@@ -506,14 +457,20 @@ const initStepFields = (step, index) => {
   if (!step.id) step.id = Date.now() + index
   if (!step.operation_type) step.operation_type = 'web'
   if (!step.operation_event) step.operation_event = 'click'
-  if (!step.operation_count) step.operation_count = 1
-  if (!step.pause_time) step.pause_time = 1
+  
+  // Ensure number types for el-input-number
+  step.operation_count = Number(step.operation_count) || 1
+  step.pause_time = Number(step.pause_time) || 1
+  
   if (!step.tab_switch_enabled) step.tab_switch_enabled = 'no'
+  if (!step.tab_switch_mode) step.tab_switch_mode = 'permanent'
   if (!step.assertion_enabled) step.assertion_enabled = 'no'
   if (!step.screenshot_enabled) step.screenshot_enabled = 'no'
   if (!step.blocker_enabled) step.blocker_enabled = 'no'
   if (!step.no_image_click_enabled) step.no_image_click_enabled = 'no'
   if (!step.captcha_retry_enabled) step.captcha_retry_enabled = 'no'
+  if (!step.captcha_next_event) step.captcha_next_event = 'click'
+  if (!step.captcha_next_params) step.captcha_next_params = ''
   
   // 补充完整字段定义
   if (!step.input_value) step.input_value = ''
@@ -530,7 +487,8 @@ const initStepFields = (step, index) => {
   if (!step.assertion_params) step.assertion_params = ''
   
   // 遮挡物相关
-  if (!step.no_image_click_count) step.no_image_click_count = 0
+  step.no_image_click_count = Number(step.no_image_click_count) || 1
+  if (!step.blocker_config) step.blocker_config = []
 
   // 初始化复杂对象结构
   if (!step.assertion_config) step.assertion_config = { custom_assertions: [], image_assertions: [], ui_assertions: [] }
@@ -570,7 +528,7 @@ const getInputValuePlaceholder = (event) => {
 }
 
 const isInputValueVisible = (event) => {
-  return ['input', 'select_option', 'press_key', 'drag_and_drop', 'solve_captcha'].includes(event)
+  return ['input', 'select_option', 'press_key', 'drag_and_drop'].includes(event)
 }
 
 watch(() => props.modelValue, (val) => {
@@ -609,6 +567,8 @@ const addStep = () => {
     no_image_click_enabled: 'no',
     no_image_click_count: 0,
     captcha_retry_enabled: 'no',
+    captcha_next_event: 'click',
+    captcha_next_params: '',
     // 复杂对象
     assertion_config: { custom_assertions: [], image_assertions: [], ui_assertions: [] },
     screenshot_config: { format: 'png', full_page: false, path: 'screenshots/', prefix: 'screenshot_step', quality: 90, timing: 'after' },
@@ -676,11 +636,15 @@ const handleTypeChange = (step) => {
   }
 }
 
+
+
 const handleImageUpload = (step, file) => {
   step.operation_params = file.raw.name // 临时保存文件名，实际应为上传后的路径
   // 预览逻辑可能需要单独处理，或者后端返回路径后再设置
   ElMessage.success('图片已选择(需后端支持实际上传)')
 }
+
+
 
 const isActionConfigurable = (action) => {
   return ['login', 'register'].includes(action)
@@ -688,101 +652,26 @@ const isActionConfigurable = (action) => {
 
 const openConfigDialog = async (step, type) => {
   currentConfigStep.value = step
+  currentConfigType.value = type
   const titles = {
     action: '操作事件参数',
     tab_switch: '标签页跳转',
     assertion: '断言设置',
     screenshot: '截图设置',
     obstruction: '遮挡物处理',
-    no_img_obstruction: '无图片遮挡物'
+    no_img_obstruction: '无图片遮挡物',
+    captcha: '验证码与登录配置'
   }
   configDialogTitle.value = titles[type] || '参数配置'
   
   if (['login', 'register'].includes(step.operation_event) && type === 'action') {
     configDialogTitle.value = '登录/注册配置'
     
-    // Register or Login Event Auto-fill Logic
-    if (['register', 'login'].includes(step.operation_event)) {
-      // Initialize config if not exists
-      if (!step.login_register_config) {
-          step.login_register_config = {
-             email_locator: '',
-             password_locator: '',
-             repeat_password_locator: '',
-             submit_button_locator: '',
-             address_url: '',
-             account: '',
-             password: '',
-             last_event: ''
-          }
-      }
-      
-      if (step.login_register_config.last_event !== step.operation_event) {
-          const allAddresses = []
-          if (props.productsInfo && props.productsInfo.length > 0) {
-            props.productsInfo.forEach(p => {
-              if (p.addresses && Array.isArray(p.addresses)) {
-                 allAddresses.push(...p.addresses.filter(a => a && a.trim()))
-              } else if (p.addresses && typeof p.addresses === 'string') {
-                 allAddresses.push(p.addresses)
-              }
-            })
-          }
-          
-          if (allAddresses.length > 0) {
-            step.login_register_config.address_url = allAddresses.join('\n')
-            
-            try {
-              let apiUrl = ''
-              if (step.operation_event === 'register') {
-                  apiUrl = '/api/automation/management/generate_register_accounts'
-              } else {
-                  apiUrl = '/api/automation/management/get_login_accounts'
-              }
-              
-              const res = await axios.post(apiUrl, {
-                urls: allAddresses
-              })
-              
-              if (res.data.code === 200) {
-                const results = res.data.data
-                const emails = []
-                const passwords = []
-                
-                allAddresses.forEach(url => {
-                  if (results[url]) {
-                    emails.push(results[url].email || '')
-                    // For register, password is fixed '123456789' in backend usually, but let's use what backend returns or default
-                    passwords.push(results[url].password || '')
-                  } else {
-                    emails.push('')
-                    passwords.push('')
-                  }
-                })
-                
-                step.login_register_config.account = emails.join('\n')
-                
-                if (step.operation_event === 'register') {
-                    step.login_register_config.password = '123456789'
-                } else {
-                    step.login_register_config.password = passwords.join('\n')
-                }
-                
-                // Update last_event to mark as generated for this event type
-                step.login_register_config.last_event = step.operation_event
-              } else {
-                ElMessage.error(res.data.message || '获取账号数据失败')
-              }
-            } catch (e) {
-              console.error(e)
-              ElMessage.error('获取账号数据请求异常')
-            }
-          }
-      }
-    }
+
   }
 
   configDialogVisible.value = true
+  isChildEditing.value = false // 重置编辑状态
 }
 
 const handleOperationEventChange = (step) => {
@@ -802,23 +691,204 @@ const handleOperationEventChange = (step) => {
   step.login_register_config.last_event = ''
 }
 
-const saveConfig = () => {
-  // Login/Register Validation
-  if (currentConfigStep.value && ['login', 'register'].includes(currentConfigStep.value.operation_event)) {
-      const config = currentConfigStep.value.login_register_config
-      if (!config) {
-          configDialogVisible.value = false
+// --- 校验逻辑开始 ---
+
+// 验证登录/注册配置
+const validateLoginConfig = (step) => {
+  const errors = []
+  const c = step.login_register_config || {}
+  if (!c.email_locator) errors.push('邮箱/账号元素定位参数')
+  if (!c.password_locator) errors.push('密码元素定位参数')
+  if (!c.submit_button_locator) errors.push('提交按钮元素定位参数')
+  if (!c.account) errors.push('邮箱/账号')
+  if (!c.password) errors.push('密码')
+  return errors
+}
+
+// 验证验证码配置
+const validateCaptchaConfig = (step) => {
+  const errors = []
+  if (!step.operation_params) errors.push('验证码图片元素定位')
+  if (!step.input_value) errors.push('验证码输入框定位')
+  if (!step.captcha_next_params) errors.push('验证码后续操作元素定位')
+  return errors
+}
+
+// 验证标签页跳转配置
+const validateTabSwitchConfig = (step) => {
+  const errors = []
+  if (!step.tab_switch_mode) errors.push('标签页跳转方式')
+  if (step.tab_switch_mode !== 'temporary' && !step.tab_target_url) {
+    errors.push('目标标签页网址')
+  }
+  return errors
+}
+
+// 验证单一步骤的所有必填项
+const validateStep = (step) => {
+  const errors = []
+  
+  // 1. 基础信息
+  if (!step.step_name) errors.push('步骤名称')
+  if (!step.operation_type) errors.push('操作类型')
+  
+  if (step.operation_type === 'web') {
+    if (!step.operation_event) errors.push('操作事件')
+    
+    // 常规Web操作 (非配置型且非验证码)
+    if (!isActionConfigurable(step.operation_event) && step.operation_event !== 'solve_captcha') {
+       if (!step.operation_params) errors.push('元素定位参数')
+       if (isInputValueVisible(step.operation_event) && !step.input_value) {
+          errors.push('操作参数值')
+       }
+    }
+    
+    // 各类配置校验
+    if (step.operation_event === 'solve_captcha') {
+       errors.push(...validateCaptchaConfig(step))
+    }
+    
+    if (['login', 'register'].includes(step.operation_event)) {
+       errors.push(...validateLoginConfig(step))
+    }
+    
+    if (step.tab_switch_enabled === 'yes') {
+       errors.push(...validateTabSwitchConfig(step))
+    }
+    
+    if (step.no_image_click_enabled === 'yes') {
+       if (!step.no_image_click_count) errors.push('无图片遮挡物点击次数')
+    }
+  } else if (step.operation_type === 'game') {
+    if (!step.operation_params) errors.push('步骤图片')
+  }
+  
+  return errors
+}
+
+// 公共校验方法 (供父组件调用)
+const validateAllSteps = () => {
+  if (steps.value.length === 0) {
+     ElMessage.warning('请至少添加一个测试步骤')
+     return false
+  }
+  
+  for (let i = 0; i < steps.value.length; i++) {
+     const step = steps.value[i]
+     const errors = validateStep(step)
+     if (errors.length > 0) {
+        // 滚动到错误步骤
+        highlightedStepId.value = step.id
+        nextTick(() => {
+          const el = stepRefs.value[step.id]
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        })
+        ElMessage.warning(`第 ${i + 1} 步存在未填写的必填项: ${errors[0]}`)
+        return false
+     }
+  }
+  return true
+}
+
+defineExpose({ validateAllSteps })
+
+// --- 校验逻辑结束 ---
+
+const saveConfig = async () => {
+  if (!currentConfigStep.value) return
+
+  // 1. 登录/注册配置校验
+  if (currentConfigType.value === 'action' && ['login', 'register'].includes(currentConfigStep.value.operation_event)) {
+      const errors = validateLoginConfig(currentConfigStep.value)
+      if (errors.length > 0) {
+          ElMessage.warning(`请填写必填项: ${errors[0]}`)
           return
       }
-      
-      const missingFields = []
-      if (!config.email_locator) missingFields.push('邮箱/账号元素定位参数')
-      if (!config.password_locator) missingFields.push('密码元素定位参数')
-      if (!config.submit_button_locator) missingFields.push('提交按钮元素定位参数')
-      
-      if (missingFields.length > 0) {
-          ElMessage.warning(`请填写必填项: ${missingFields.join(', ')}`)
+  }
+
+  // 2. 验证码配置校验
+  if (currentConfigType.value === 'captcha') {
+      const errors = validateCaptchaConfig(currentConfigStep.value)
+      if (errors.length > 0) {
+          ElMessage.warning(`请填写必填项: ${errors[0]}`)
           return
+      }
+  }
+  
+  // 3. 标签页跳转校验
+  if (currentConfigType.value === 'tab_switch') {
+      const errors = validateTabSwitchConfig(currentConfigStep.value)
+      if (errors.length > 0) {
+          ElMessage.warning(`请填写必填项: ${errors[0]}`)
+          return
+      }
+  }
+  
+  // 4. 无图片遮挡物校验
+  if (currentConfigType.value === 'no_img_obstruction') {
+      if (!currentConfigStep.value.no_image_click_count) {
+          ElMessage.warning('请填写点击次数')
+          return
+      }
+  }
+
+  // 遮挡物配置保存逻辑
+  if (currentConfigType.value === 'obstruction') {
+      if (currentConfigStep.value.blocker_temp_files && currentConfigStep.value.blocker_temp_files.length > 0) {
+          try {
+              // 筛选需要上传的文件
+              const filesToUpload = currentConfigStep.value.blocker_temp_files.filter(f => f.raw)
+              const uploadedFilesMap = {} // name -> server_url
+
+              if (filesToUpload.length > 0) {
+                   const uploadPromises = filesToUpload.map(async (file) => {
+                       const formData = new FormData()
+                       formData.append('file', file.raw)
+                       
+                       const res = await axios.post('/api/automation/product/upload', formData, {
+                           headers: { 'Content-Type': 'multipart/form-data' }
+                       })
+                       
+                       if (res.data && res.data.code === 200) {
+                           // 释放 Blob URL
+                           if (file.url && file.url.startsWith('blob:')) {
+                               URL.revokeObjectURL(file.url)
+                           }
+                           return { name: file.name, url: res.data.data.url }
+                       } else {
+                           throw new Error(res.data.msg || '上传失败')
+                       }
+                   })
+                   
+                   const results = await Promise.all(uploadPromises)
+                   results.forEach(item => {
+                       uploadedFilesMap[item.name] = item.url
+                   })
+              }
+
+              // 生成配置项
+              const newItems = currentConfigStep.value.blocker_temp_files.map(f => ({
+                  name: f.name,
+                  path: uploadedFilesMap[f.name] || f.url || f.name, // 优先使用上传后的URL
+                  confidence: 0.8 // 默认置信度
+              }))
+              
+              if (!currentConfigStep.value.blocker_config) currentConfigStep.value.blocker_config = []
+              
+              // 简单的去重检查
+              newItems.forEach(item => {
+                  if (!currentConfigStep.value.blocker_config.find(existing => existing.name === item.name)) {
+                      currentConfigStep.value.blocker_config.push(item)
+                  }
+              })
+              
+              // 保存后清空临时文件
+              currentConfigStep.value.blocker_temp_files = []
+              
+          } catch (error) {
+              ElMessage.error('文件上传失败: ' + error.message)
+              return
+          }
       }
   }
   
@@ -1078,5 +1148,251 @@ export default {
 .dialog-content-wrapper {
   padding: 10px;
   min-height: 150px;
+}
+
+/* Required field marker */
+.label[required]::before {
+  content: '*';
+  color: #f56c6c;
+  margin-right: 4px;
+}
+
+.screenshot-timing-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  width: 100%;
+}
+
+.screenshot-timing-group .el-radio {
+  margin-right: 0;
+  width: 100%;
+  height: auto;
+  padding: 10px;
+}
+
+/* 新增样式 */
+.info-box {
+  background-color: #ecf5ff;
+  border-left: 5px solid #409eff;
+  padding: 15px;
+  border-radius: 4px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.info-icon {
+  color: #409eff;
+  font-size: 20px;
+  margin-top: 2px;
+}
+
+.info-title {
+  font-weight: bold;
+  color: #303133;
+  margin-bottom: 5px;
+}
+
+.info-desc {
+  font-size: 13px;
+  color: #606266;
+  line-height: 1.5;
+}
+
+.mt-20 { margin-top: 20px; }
+.mb-5 { margin-bottom: 5px; }
+.mr-10 { margin-right: 10px; }
+.text-secondary { color: #909399; font-size: 13px; }
+
+.nav-map-container {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: #f8f9fb;
+  border-radius: 8px;
+  border: 1px dashed #dcdfe6;
+}
+
+.center-text { text-align: center; }
+
+.nav-steps {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.nav-step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100px;
+}
+
+.step-circle {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #fff;
+  border: 2px solid #dcdfe6;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.step-circle.dashed { border-style: dashed; }
+.step-circle.active { 
+  background-color: #00bfa5; 
+  border-color: #00bfa5; 
+  color: #fff; 
+}
+
+.step-label { font-size: 12px; color: #909399; }
+.step-label.active { color: #00bfa5; font-weight: bold; }
+
+.step-line {
+  flex: 1;
+  height: 1px;
+  background-color: #dcdfe6;
+  max-width: 150px;
+  min-width: 80px;
+  margin: 0 10px;
+  position: relative;
+  top: -12px; /* Align with circle center */
+}
+
+.line-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #f8f9fb;
+  padding: 0 8px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.blocker-list {
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 10px;
+  min-height: 50px;
+}
+
+/* 断言弹窗相关样式 */
+.mb-20 { margin-bottom: 20px; }
+
+.assertion-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: #e4e7ed;
+}
+
+.custom-tab-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+}
+
+.tab-pane-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 15px 0 20px;
+}
+
+.pane-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: #303133;
+}
+
+.empty-assertion {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 4px;
+  color: #909399;
+  background-color: #fafafa;
+}
+
+.empty-icon {
+  font-size: 48px;
+  color: #dcdfe6;
+  margin-bottom: 15px;
+}
+
+.empty-text {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.empty-subtext {
+  font-size: 12px;
+}
+
+.assertion-list {
+  margin-bottom: 20px;
+}
+
+.hint-text .el-icon {
+  margin-right: 4px;
+  position: relative;
+  top: 1px;
+}
+
+.purple-hint {
+  color: #722ed1;
+  background-color: #f9f0ff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.purple-hint .el-icon {
+  font-size: 14px;
+  margin-right: 6px;
+}
+
+/* 图片断言弹窗特定样式 - 保持设计图风格 */
+.full-width-upload {
+  width: 100%;
+}
+
+.full-width-upload :deep(.el-upload) {
+  width: 100%;
+}
+
+.full-width-upload :deep(.el-upload-dragger) {
+  width: 100%;
+  padding: 40px 0;
+  height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.upload-demo :deep(.el-upload__text) {
+  font-size: 14px;
+  color: #606266;
+  margin-top: 10px;
+}
+
+.upload-demo :deep(.el-upload__tip) {
+  text-align: center;
+  margin-top: 10px;
+  color: #909399;
 }
 </style>

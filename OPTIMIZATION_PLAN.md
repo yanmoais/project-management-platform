@@ -17,7 +17,7 @@
   - 在服务器/开发环境部署 Redis (建议版本 6.0+)。
   - 验证 Redis 连接与权限。
 - [ ] **添加 Python 依赖**
-  - 更新 `backend/requirements.txt`：
+  - 更新 `backend_fastapi/requirements.txt`：
     ```text
     celery==5.3.6
     redis==5.0.1
@@ -25,13 +25,13 @@
     ```
 
 #### Phase 2: 后端代码重构
-- [ ] **配置 Celery (backend/config.py)**
+- [ ] **配置 Celery (backend_fastapi/config.py)**
   - 添加 Redis 连接配置：
     ```python
     CELERY_BROKER_URL = 'redis://localhost:6379/0'
     CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
     ```
-- [ ] **初始化 Celery 实例 (backend/app.py)**
+- [ ] **初始化 Celery 实例 (backend_fastapi/app.py)**
   - 创建 `make_celery` 工厂函数，将 Celery 与 Flask 应用上下文绑定。
 - [ ] **重构任务逻辑 (AutomationManagement_Router.py)**
   - 将 `simulate_execution` 函数转换为 Celery Task (`@celery.task`)。
@@ -53,7 +53,7 @@
 #### Phase 4: 部署与监控
 - [ ] **启动 Worker 进程**
   - 编写启动脚本，独立于 Web 服务启动 Celery Worker：
-    `celery -A backend.app.celery worker --loglevel=info`
+    `celery -A backend_fastapi.app.celery worker --loglevel=info`
 - [ ] **(可选) 引入 Flower 监控**
   - 部署 Flower 插件，提供可视化的任务队列监控界面。
 

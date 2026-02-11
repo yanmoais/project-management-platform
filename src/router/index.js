@@ -19,6 +19,15 @@ import TestEnvironmentView from '../views/TestEnvironment/TestEnvironmentView.vu
 import WebAutomationDashboard from '../views/AutomationPlatform/WebAutomation/WebAutomationDashboard.vue'
 import ProductManagementView from '../views/AutomationPlatform/WebAutomation/ProductManagementView.vue'
 import AutomationManagementView from '../views/AutomationPlatform/WebAutomation/AutomationManagementView.vue'
+import InterfaceProjectManagementView from '../views/AutomationPlatform/InterfaceAutomation/ProjectManagementView.vue'
+import InterfaceCaseManagementView from '../views/AutomationPlatform/InterfaceAutomation/CaseManagementView.vue'
+import InterfaceTestManagementView from '../views/AutomationPlatform/InterfaceAutomation/TestManagementView.vue'
+import InterfaceApiManagementView from '../views/AutomationPlatform/InterfaceAutomation/ApiManagementView.vue'
+import InterfaceTestReportView from '../views/AutomationPlatform/InterfaceAutomation/TestReportView.vue'
+import InterfaceDocumentManagementView from '../views/AutomationPlatform/InterfaceAutomation/DocumentManagementView.vue'
+import InterfaceCommonMethodsView from '../views/AutomationPlatform/InterfaceAutomation/CommonMethodsView.vue'
+import InterfaceAssertionTemplatesView from '../views/AutomationPlatform/InterfaceAutomation/AssertionTemplatesView.vue'
+import InterfaceCommonConfigView from '../views/AutomationPlatform/InterfaceAutomation/CommonConfigView.vue'
 import UserView from '../views/System/UserView.vue'
 import RoleView from '../views/System/RoleView.vue'
 import MenuView from '../views/System/MenuView.vue'
@@ -153,7 +162,63 @@ const routes = [
             name: 'InterfaceAutomation',
             component: ParentView,
             meta: { title: '接口自动化' },
-            children: []
+            redirect: '/automation/interface/project',
+            children: [
+              {
+                path: 'project',
+                name: 'InterfaceProjectManagement',
+                component: InterfaceProjectManagementView,
+                meta: { title: '项目管理' }
+              },
+              {
+                path: 'case',
+                name: 'InterfaceCaseManagement',
+                component: InterfaceCaseManagementView,
+                meta: { title: '用例管理' }
+              },
+              {
+                path: 'test',
+                name: 'InterfaceTestManagement',
+                component: InterfaceTestManagementView,
+                meta: { title: '测试管理' }
+              },
+              {
+                path: 'api',
+                name: 'InterfaceApiManagement',
+                component: InterfaceApiManagementView,
+                meta: { title: 'API接口管理' }
+              },
+              {
+                path: 'report',
+                name: 'InterfaceTestReport',
+                component: InterfaceTestReportView,
+                meta: { title: '测试报告' }
+              },
+              {
+                path: 'document',
+                name: 'InterfaceDocumentManagement',
+                component: InterfaceDocumentManagementView,
+                meta: { title: '文档管理' }
+              },
+              {
+                path: 'method',
+                name: 'InterfaceCommonMethods',
+                component: InterfaceCommonMethodsView,
+                meta: { title: '公用方法' }
+              },
+              {
+                path: 'assertion',
+                name: 'InterfaceAssertionTemplates',
+                component: InterfaceAssertionTemplatesView,
+                meta: { title: '断言模板' }
+              },
+              {
+                path: 'config',
+                name: 'InterfaceCommonConfig',
+                component: InterfaceCommonConfigView,
+                meta: { title: '公共配置' }
+              }
+            ]
           }
         ]
       },

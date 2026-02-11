@@ -46,7 +46,6 @@ export const useUserStore = defineStore('user', {
       try {
         const res = await getInfo()
         const { roles, name, avatar, permissions } = res.data
-        console.log("当前的用户信息为：",res.data)
         if (!roles || roles.length <= 0) {
             this.roles = ['ROLE_DEFAULT']
         } else {

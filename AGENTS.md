@@ -23,6 +23,7 @@
 - 项目的所有api服务逻辑都在src\api下进行对应页面功能的编写
 - 项目的数据库为mysql，数据库的域名、账号、密码配置均在src\settings.js
 - 项目的数据库表结构在create.sql中
+- FastApi后端的结构需要和现有的 backend Flask结构一致，文件夹以及文件结构以及文件名要完整一一对应，不能有任何差异
 
 ## 权限模型
 - 采用 RBAC（Role-Based Access Control）模型：用户 -> 角色 -> 菜单/按钮

@@ -72,21 +72,21 @@
                     
                     <!-- Project Info Fields -->
                     <div class="project-info-tags" v-if="group.info && Object.keys(group.info).length > 0">
-                      <span class="info-item item-product-type" v-if="group.info.product_type">
+                      <el-tag v-if="group.info.product_type" size="small" effect="light" type="primary" class="info-tag" round>
                         <el-icon><Monitor /></el-icon> {{ group.info.product_type }}
-                      </span>
-                      <span class="info-item item-system-type" v-if="group.info.system_type">
+                      </el-tag>
+                      <el-tag v-if="group.info.system_type" size="small" effect="light" type="warning" class="info-tag" round>
                         <el-icon><Platform /></el-icon> {{ group.info.system_type }}
-                      </span>
-                      <span class="info-item item-environment" v-if="group.info.environment">
+                      </el-tag>
+                      <el-tag v-if="group.info.environment" size="small" effect="light" type="success" class="info-tag" round>
                         <el-icon><Connection /></el-icon> {{ group.info.environment }}
-                      </span>
-                      <span class="info-item item-product-id" v-if="group.info.product_id">
+                      </el-tag>
+                      <el-tag v-if="group.info.product_id" size="small" effect="plain" type="info" class="info-tag" round>
                         <el-icon><CollectionTag /></el-icon> {{ group.info.product_id }}
-                      </span>
-                      <span class="info-item item-version-number" v-if="group.info.version_number">
+                      </el-tag>
+                      <el-tag v-if="group.info.version_number" size="small" effect="plain" type="info" class="info-tag" round>
                         <el-icon><InfoFilled /></el-icon> {{ group.info.version_number }}
-                      </span>
+                      </el-tag>
                     </div>
                   </div>
                   
@@ -583,23 +583,20 @@ const handleHistory = (row) => {
 <style scoped>
 .automation-management-container {
   padding: 20px;
+  background-color: #f5f7fa;
+  min-height: 100vh;
 }
 
 .header-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding: 0 20px;
+  margin-bottom: 24px;
+  padding: 0 4px;
 }
 
 .group-section-collapse {
-  padding: 0 20px;
-}
-
-.group-card :deep(.el-card__header) {
-  padding: 0; /* 移除默认 padding 以允许自定义 header 填充 */
-  border-bottom: none; /* 移除底部边框，用户保留原生样式 */
+  padding: 0 4px;
 }
 
 .group-header {
@@ -607,113 +604,105 @@ const handleHistory = (row) => {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
-  background-color: #e0e5eb;
-  padding: 15px 20px;
-  transition: background-color 0.3s;
+  background-color: #fff;
+  padding: 16px 24px;
+  transition: all 0.3s ease;
+  border-radius: 8px;
 }
 
-.group-header:hover {
-  background-color: #e0e5eb;
-}
+/* .group-header:hover {
+  background-color: #f8f9fb;
+} */
 
 .group-header-left {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
+  gap: 12px;
 }
 
 .group-title {
-  font-weight: bold;
+  font-weight: 600;
   font-size: 16px;
-  color: #303133;
+  color: #1f2d3d;
 }
 
 .project-info-tags {
   display: flex;
   align-items: center;
-  margin-left: 20px;
+  margin-left: 16px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
-.info-item {
+.info-tag {
+  border: none;
+  background-color: #f4f6f8;
+  height: auto;
+  padding: 4px 8px;
+  line-height: 1.5;
+}
+
+.info-tag :deep(.el-tag__content) {
   display: flex;
   align-items: center;
-  margin-right: 15px;
-  font-size: 13px;
-  color: #606266;
 }
 
-.info-item .el-icon {
-  margin-right: 4px;
-}
-
-.collapse-icon {
-  color: #909399;
+.info-tag .el-icon {
+  margin-right: 6px;
   font-size: 14px;
 }
 
-.item-product-type {
-  color: #409EFF;
-}
-
-.item-system-type {
-  color: #E6A23C;
-}
-
-.item-environment {
-  color: #67C23A;
-}
-
-.item-product-id {
-  color: #8E44AD;
-}
-
-.item-version-number {
-  color: #009688;
+.collapse-icon {
+  color: #c0c4cc;
+  font-size: 14px;
+  transition: transform 0.3s;
 }
 
 .content-wrapper {
-  background-color: #fff;
-  border-radius: 4px;
-  box-shadow: 0 2px 12px 0 rgba(0,0,0,0.05);
-  padding-top: 20px;
+  background-color: transparent;
+  box-shadow: none;
+  padding-top: 0;
 }
 
 /* Custom Collapse Styles */
 :deep(.el-collapse) {
-  border-top: none;
-  border-bottom: none;
+  border: none;
+  background-color: transparent;
 }
+
 :deep(.el-collapse-item) {
-  margin-bottom: 15px;
-  border: 1px solid #e4e7ed;
-  border-radius: 4px;
+  margin-bottom: 16px;
+  border: none;
+  border-radius: 8px;
   background-color: #fff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  transition: box-shadow 0.3s, transform 0.3s;
 }
+
 :deep(.el-collapse-item__header) {
-  background-color: #f5f7fa;
+  background-color: transparent;
   padding: 0;
   height: auto;
   line-height: normal;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid #f0f2f5;
 }
+
 :deep(.el-collapse-item__wrap) {
   border-bottom: none;
 }
+
 :deep(.el-collapse-item__arrow) {
   display: none;
 }
+
 :deep(.el-collapse-item__content) {
   padding-bottom: 0;
 }
 
 .custom-collapse-header {
   width: 100%;
-  padding-right: 20px;
-}
-.group-section-collapse {
-  margin-bottom: 20px;
 }
 
 /* Remove table rounded corners */
