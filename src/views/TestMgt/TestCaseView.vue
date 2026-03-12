@@ -392,7 +392,7 @@
         <div class="header-row-1">
           <div class="header-status">
              <el-tag effect="dark">
-              计划详情
+              用例执行详情
              </el-tag>
           </div>
         </div>

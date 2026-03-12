@@ -37,3 +37,10 @@ export function getTestPlanStatistics() {
     method: 'get'
   })
 }
+
+export function getTestPlanVersions() {
+  return request({
+    url: '/api/test/plan/versions',
+    method: 'get'
+  })
+}

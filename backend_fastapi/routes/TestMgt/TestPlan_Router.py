@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc, update, delete, func, case
+from sqlalchemy import select, desc, update, delete, func, case, distinct
 from sqlalchemy.orm import joinedload
 from typing import List, Optional
 from datetime import datetime
@@ -108,6 +108,19 @@ async def get_test_plan_list(
         response.append(p_dict)
         
     return response
+
+@router.get("/versions", response_model=dict)
+async def get_test_plan_versions(
+    db: AsyncSession = Depends(get_db),
+    current_user: SysUser = Depends(get_current_user)
+):
+    """获取所有测试计划的版本列表"""
+    stmt = select(distinct(TestPlan.version)).where(TestPlan.version.is_not(None))
+    result = await db.execute(stmt)
+    versions = result.scalars().all()
+    # Filter out empty strings if any
+    version_list = [v for v in versions if v]
+    return {"code": 200, "data": version_list, "msg": "success"}
 
 @router.get("/statistics", response_model=dict)
 async def get_test_plan_statistics(

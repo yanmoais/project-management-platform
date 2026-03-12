@@ -313,7 +313,7 @@
         </div>
         <el-divider style="margin: 8px 0;" />
         <div class="header-row-2 flex items-center">
-           <el-tag effect="plain" type="info" class="mr-2">{{ currentPlan.version || '-' }}</el-tag>
+           <el-tag effect="plain" class="mr-2">{{ currentPlan.version || '-' }}</el-tag>
            <h2 class="header-title mr-4">{{ currentPlan.plan_name }}</h2>
         </div>
       </div>
@@ -328,7 +328,7 @@
                   <el-tab-pane label="详细信息" name="detail">
                      <div class="detail-tab-scroll">
                         <div class="detail-section">
-                           <h3 class="section-title">执行统计</h3>
+                           <h3 class="section-title" >执行统计</h3>
                            <div v-if="planStats.total === 0" class="empty-case-placeholder">
                               <el-empty description="该测试计划没有测试内容" />
                            </div>
@@ -373,7 +373,7 @@
                         </div>
                         <TestCaseListTable
                                 :data="filteredPlanCases"
-                                @selection-change="handlePlanCaseSelectionChange"
+                                :selection="false"
                                 @title-click="openDetail"
                         />
                     </div>
@@ -481,7 +481,7 @@
     </el-drawer>
 
     <!-- 规划测试内容弹窗 -->
-    <el-dialog v-model="planCaseDialogVisible" title="管理测试用例" width="1000px">
+    <el-dialog v-model="planCaseDialogVisible" title="管理测试用例" width="1200px">
         <div class="filter-bar-unified mb-4">
             <el-row :gutter="12">
                 <el-col :span="5">
@@ -508,6 +508,7 @@
                     </el-select>
                 </el-col>
                 <el-col :span="3">
+                    <el-button type="primary" @click="fetchAvailableCases">刷新</el-button>
                     <el-button type="primary" @click="fetchAvailableCases">搜索</el-button>
                 </el-col>
             </el-row>
@@ -515,7 +516,7 @@
         <el-table 
             :data="allCases" 
             v-loading="caseLoading" 
-            height="450" 
+            height="450"
             @selection-change="handleCaseSelectionChange"
             ref="caseTableRef"
         >
@@ -536,7 +537,7 @@
             <el-table-column prop="plan_id" label="当前归属" width="150">
                 <template #default="{ row }">
                     <span v-if="row.plan_id === currentPlan.plan_id" class="text-success">当前计划</span>
-                    <span v-else-if="row.plan_id">计划: {{ row.plan_name || row.plan_id }}</span>
+                    <span v-else-if="row.plan_id">{{ row.plan_name || row.plan_id }}</span>
                     <span v-else class="text-info">未规划</span>
                 </template>
             </el-table-column>
@@ -557,7 +558,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
-import { listTestPlans, createTestPlan, updateTestPlan, deleteTestPlan, getTestPlanStatistics } from '@/api/TestMgt/TestPlan'
+import { listTestPlans, createTestPlan, updateTestPlan, deleteTestPlan, getTestPlanStatistics, getTestPlanVersions } from '@/api/TestMgt/TestPlan'
 import { listTestCases, updateTestCase } from '@/api/TestMgt/TestCase'
 import { getProjectList } from '@/api/RequirementMgt/RequirementMgtView'
 import { getDefectList } from '@/api/QualityMgt/QualityMgt'
@@ -661,10 +662,18 @@ const rules = {
   owner_id: [{ required: true, message: '请选择测试负责人', trigger: 'change' }]
 }
 
-const versionOptions = ref([
-  { value: 'V1.0.0', label: 'V1.0.0' },
-  { value: 'V1.1.0', label: 'V1.1.0' }
-])
+const versionOptions = ref([])
+
+const fetchVersions = async () => {
+  try {
+    const res = await getTestPlanVersions()
+    if (res.code === 200) {
+      versionOptions.value = (res.data || []).map(v => ({ value: v, label: v }))
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
 
 const fetchProjects = async () => {
     try {
@@ -750,9 +759,7 @@ const openDetail = (row) => {
 }
 
 
-const handlePlanCaseSelectionChange = (selection) => {
-     selectedPlanCases.value = selection
- }
+
 
 const fetchData = async () => {
   loading.value = true
@@ -887,6 +894,7 @@ const handleSubmit = async () => {
         }
         drawerVisible.value = false
         fetchData()
+        fetchVersions()
       } catch (e) {
         console.error(e)
       }
@@ -941,7 +949,7 @@ const fetchAvailableCases = async () => {
         const params = {
             case_name: caseSearchQuery.value
         }
-        if (caseFilterStatus.value !== null) params.case_status = caseFilterStatus.value
+        if (caseFilterStatus.value !== null && caseFilterStatus.value !== '') params.case_status = caseFilterStatus.value
         if (caseFilterLevel.value) params.case_level = caseFilterLevel.value
         if (caseFilterType.value) params.case_type = caseFilterType.value
         if (caseFilterCreator.value) params.create_by = caseFilterCreator.value
@@ -953,32 +961,17 @@ const fetchAvailableCases = async () => {
         console.error(e)
     } finally {
         caseLoading.value = false
-        // Restore selection logic is tricky with pagination or refresh, 
-        // but here we rely on manual toggle in openPlanCaseDialog or user interaction
-        // If we want to persist selection across searches, we need to handle it carefully.
-        // For simplicity, we assume user selects what they see or we re-toggle if in selectedCases.
+        // 移除自动勾选逻辑，确保默认不选中任何数据
         if (caseTableRef.value) {
-            // Wait for render
-            setTimeout(() => {
-                allCases.value.forEach(row => {
-                    if (selectedCases.value.some(c => c.case_id === row.case_id)) {
-                        caseTableRef.value.toggleRowSelection(row, true)
-                    }
-                })
-            }, 50)
+            caseTableRef.value.clearSelection()
         }
     }
 }
 
 const openPlanCaseDialog = async () => {
     planCaseDialogVisible.value = true
-    // Initialize selectedCases with current plan cases
-    // Make sure we have the latest list
-    if (planStats.cases) {
-        selectedCases.value = [...planStats.cases]
-    } else {
-        selectedCases.value = []
-    }
+    // 重置选择，不默认勾选任何数据
+    selectedCases.value = []
     
     // Fetch initial list
     await fetchAvailableCases()
@@ -995,14 +988,21 @@ const handleCaseSelectionChange = (selection) => {
 }
 
 const submitPlanCases = async () => {
-    const caseIds = selectedCases.value.map(c => c.case_id)
+    // 获取新选中的用例 ID
+    const newCaseIds = selectedCases.value.map(c => c.case_id)
+    
+    // 获取已有的用例 ID（从 planStats.cases 中提取）
+    const existingCaseIds = (planStats.cases || []).map(c => c.case_id)
+    
+    // 合并 ID，使用 Set 去重
+    const finalCaseIds = [...new Set([...existingCaseIds, ...newCaseIds])]
     
     try {
         // Use updateTestPlan to update associated_case_ids
         // Backend will handle updating TestCase.plan_id
         await updateTestPlan({
             plan_id: currentPlan.value.plan_id,
-            associated_case_ids: caseIds
+            associated_case_ids: finalCaseIds
         })
         
         ElMessage.success('关联测试用例成功')
@@ -1074,6 +1074,7 @@ onMounted(() => {
   fetchStatistics()
   fetchData()
   fetchProjects()
+  fetchVersions()
 })
 </script>
 

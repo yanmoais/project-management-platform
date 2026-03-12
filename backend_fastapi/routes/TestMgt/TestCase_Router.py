@@ -25,7 +25,9 @@ async def get_test_case_list(
     req_id: Optional[int] = None,
     case_id: Optional[int] = None,
     start_date: Optional[str] = None,
-    end_date: Optional[str] = None
+    end_date: Optional[str] = None,
+    case_status: Optional[int] = None,
+    case_type: Optional[int] = None
 ):
     stmt = select(TestCase).order_by(desc(TestCase.create_time))
     
@@ -40,6 +42,12 @@ async def get_test_case_list(
 
     if case_level:
         stmt = stmt.where(TestCase.case_level == case_level)
+
+    if case_status is not None:
+        stmt = stmt.where(TestCase.case_status == case_status)
+
+    if case_type is not None:
+        stmt = stmt.where(TestCase.case_type == case_type)
     
     if req_id:
         stmt = stmt.where(TestCase.req_id == req_id)
