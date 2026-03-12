@@ -5,6 +5,7 @@ import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
 import './assets/css/Auth/auth.css'
+import './assets/font-awesome/css/font-awesome.min.css'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 
 const app = createApp(App)

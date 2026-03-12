@@ -15,4 +15,11 @@ celery_app.conf.update(
     timezone="Asia/Shanghai",
     enable_utc=True,
     broker_connection_retry_on_startup=settings.CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP,
+    beat_schedule={
+        'scan-automation-rules-every-minute': {
+            'task': 'backend_fastapi.tasks.automation_tasks.scan_automation_rules',
+            'schedule': 60.0, # 每 60 秒执行一次
+            'args': ()
+        },
+    }
 )

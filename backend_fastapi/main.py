@@ -1,5 +1,6 @@
 import os
 from fastapi import FastAPI
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from backend_fastapi.core.config import settings
@@ -8,20 +9,23 @@ from backend_fastapi.routes.Workbench import Workbench_Router
 from backend_fastapi.routes.MySpace import MySpace_Router
 from backend_fastapi.routes.ProjectMgt import Project_Router
 from backend_fastapi.routes.RequirementMgt import Requirement_Router
-from backend_fastapi.routes.DevelopmentMgt import Development_Router
-from backend_fastapi.routes.TransferDeployment import Deployment_Router
 from backend_fastapi.routes.QualityMgt import Quality_Router
 from backend_fastapi.routes.UserAcceptance import UAT_Router
 from backend_fastapi.routes.ProductionMgt import Production_Router
 from backend_fastapi.routes.ProductionIssue import Issue_Router
 from backend_fastapi.routes.Report import Report_Router
+from backend_fastapi.routes.QualityMgt import Defect_Router
 from backend_fastapi.routes.SystemManager import (
     User_Router as SysUser_Router,
     Role_Router as SysRole_Router,
     Menu_Router as SysMenu_Router,
     Dept_Router as SysDept_Router,
     Post_Router as SysPost_Router,
-    Notice_Router as SysNotice_Router
+    Notice_Router as SysNotice_Router,
+    Notification_Router as SysNotification_Router,
+    Dict_Router as SysDict_Router,
+    Automation_Router as SysAutomation_Router,
+    File_Router as SysFile_Router
 )
 from backend_fastapi.routes.TestEnvironment import TestEnvironment_Router
 from backend_fastapi.routes.AutomationPlatform.WebAutomation import (
@@ -41,9 +45,13 @@ from backend_fastapi.routes.AutomationPlatform.InterfaceAutomation import (
     CommonConfig_Router as InterfaceConfig_Router
 )
 
+from backend_fastapi.routes.TestMgt import TestPlan_Router, TestCase_Router
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
-    openapi_url=f"/openapi.json"
+    openapi_url=f"/openapi.json",
+    docs_url=None,
+    redoc_url=None
 )
 
 # 配置 CORS
@@ -53,6 +61,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["Authorization"],
 )
 
 # 挂载静态文件
@@ -61,15 +70,24 @@ if not os.path.exists(static_dir):
     os.makedirs(static_dir)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui_html():
+    return get_swagger_ui_html(
+        openapi_url=app.openapi_url,
+        title=app.title + " - Swagger UI",
+        oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
+        swagger_js_url="/static/swagger-ui/swagger-ui-bundle.js",
+        swagger_css_url="/static/swagger-ui/swagger-ui.css",
+    )
+
 # 注册路由
 app.include_router(Auth_Router.router, prefix="/api")
 app.include_router(Workbench_Router.router, prefix="/api/workbench")
 app.include_router(MySpace_Router.router, prefix="/api/my-space")
 app.include_router(Project_Router.router, prefix="/api/project")
 app.include_router(Requirement_Router.router, prefix="/api/requirement")
-app.include_router(Development_Router.router, prefix="/api/development")
-app.include_router(Deployment_Router.router, prefix="/api/deployment")
 app.include_router(Quality_Router.router, prefix="/api/quality")
+app.include_router(Defect_Router.router, prefix="/api/quality/defect")
 app.include_router(UAT_Router.router, prefix="/api/uat")
 app.include_router(Production_Router.router, prefix="/api/production")
 app.include_router(Issue_Router.router, prefix="/api/issue")
@@ -78,6 +96,9 @@ app.include_router(TestEnvironment_Router.router, prefix="/api/environment")
 app.include_router(WebAutomationDashboard_Router.router, prefix="/api/automation/web")
 app.include_router(ProductManagement_Router.router, prefix="/api/automation/product")
 app.include_router(AutomationManagement_Router.router, prefix="/api/automation/management")
+
+app.include_router(TestPlan_Router.router, prefix="/api/test/plan")
+app.include_router(TestCase_Router.router, prefix="/api/test/case")
 
 # 接口自动化路由
 app.include_router(InterfaceProject_Router, prefix="/api/automation/interface/project")
@@ -97,6 +118,10 @@ app.include_router(SysMenu_Router.router, prefix="/api/system/menu")
 app.include_router(SysDept_Router.router, prefix="/api/system/dept")
 app.include_router(SysPost_Router.router, prefix="/api/system/post")
 app.include_router(SysNotice_Router.router, prefix="/api/system/notice")
+app.include_router(SysNotification_Router.router, prefix="/api/system/notification")
+app.include_router(SysDict_Router.router, prefix="/api/system/dict")
+app.include_router(SysAutomation_Router.router, prefix="/api/system/automation")
+app.include_router(SysFile_Router.router, prefix="/api/system/file")
 
 @app.get("/")
 async def root():

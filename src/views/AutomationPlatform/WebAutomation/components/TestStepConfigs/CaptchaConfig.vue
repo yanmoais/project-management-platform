@@ -26,7 +26,7 @@
         <el-col :span="12">
           <el-form-item label="是否开启验证码重试">
             <el-select v-model="step.captcha_retry_enabled" placeholder="请选择">
-              <el-option label="是 (最大重试3次)" value="yes" />
+              <el-option label="是 (最大重试10次)" value="yes" />
               <el-option label="否" value="no" />
             </el-select>
           </el-form-item>

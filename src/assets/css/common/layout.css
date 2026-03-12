@@ -1,0 +1,298 @@
+/* 全局通用布局样式 */
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* 页面主容器 */
+.page-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #f5f7fa;
+}
+
+.layout-container {
+  height: 100%;
+  background-color: #f5f7fa;
+  overflow: hidden;
+}
+
+/* 侧边栏样式 */
+.sidebar {
+  background-color: #fff;
+  border-right: 1px solid #e6e6e6;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 0;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  padding: 0 20px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #909399;
+  text-transform: uppercase;
+}
+
+.el-menu-vertical {
+  border-right: none;
+  background-color: transparent;
+}
+
+/* 修复 Element Plus 菜单样式覆盖 */
+.el-menu-vertical :deep(.el-menu-item),
+.el-menu-item {
+  height: 40px;
+  line-height: 40px;
+  margin: 4px 12px;
+  border-radius: 4px;
+  color: #606266;
+}
+
+.el-menu-vertical :deep(.el-menu-item:hover),
+.el-menu-item:hover {
+  background-color: #f5f7fa;
+  color: #409eff;
+}
+
+.el-menu-vertical :deep(.el-menu-item.is-active),
+.el-menu-item.is-active {
+  background-color: #ecf5ff;
+  color: #409eff;
+  font-weight: 500;
+}
+
+.sidebar .badge,
+.el-menu-item .badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 18px;
+  height: 18px;
+  color: #909399; /* 默认颜色，具体业务可能覆盖为白色背景+红色等 */
+}
+
+/* 特殊 badge 样式 (如 ProjectMgtView 中使用的) */
+.badge.error {
+  background-color: #f56c6c;
+  color: white;
+}
+
+.quick-actions {
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.quick-action-btn {
+  justify-content: flex-start;
+  padding-left: 16px;
+  color: #606266;
+  margin-left: 0;
+  height: 32px; /* 稍微紧凑一点 */
+}
+
+.quick-action-btn:hover {
+  background-color: #f5f7fa;
+  color: #409eff;
+}
+
+/* 右侧内容区样式 */
+.right-content {
+  padding: 0px;
+  background-color: #f5f7fa;
+  overflow: hidden; /* 禁止整体滚动，改为内部滚动 */
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 统一的内容容器 (白底圆角卡片) */
+.unified-content {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+  overflow: hidden; /* 防止内容溢出容器 */
+}
+
+/* 头部样式 */
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.total-count {
+  font-size: 14px;
+  color: #909399;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.icon-actions {
+  border-left: 1px solid #dcdfe6;
+  padding-left: 12px;
+  margin-left: 4px;
+  display: flex;
+  gap: 8px;
+}
+
+/* 筛选栏样式 */
+.filter-bar-unified {
+  background-color: #f5f7fa; /* 或者 transparent，视设计而定，ProjectMgtView用了背景色 */
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+/* 如果是在 RequirementMgtView 中，filter-bar 可能是白底或者无背景，这里做兼容 */
+.unified-content .filter-bar-unified {
+  background-color: #f8fafc; /* 稍微区分一下背景 */
+}
+
+.filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-item .label {
+  font-size: 13px;
+  color: #606266;
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.filter-actions {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  height: 100%; /* 确保按钮底部对齐 */
+}
+
+/* 列表/表格通用样式 */
+.unified-content .el-table {
+  flex: 1; /* 占据剩余空间 */
+  overflow: hidden; /* 防止表格溢出 */
+  display: flex;
+  flex-direction: column;
+}
+
+.unified-content .el-table__inner-wrapper {
+  height: 100% !important;
+}
+
+/* 确保表格体可以滚动 */
+.unified-content .el-table__body-wrapper {
+  flex: 1;
+  overflow-y: auto !important;
+}
+
+.title-cell {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.title-text {
+  font-weight: 500;
+  color: #303133;
+}
+
+.title-text:hover {
+  color: #409eff;
+}
+
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.assignee-cell {
+  display: flex;
+  align-items: center;
+}
+
+.color-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 8px;
+}
+
+/* 卡片视图通用样式 */
+.project-card-simple {
+  transition: all 0.3s;
+  border: 1px solid #ebeef5;
+}
+
+.project-card-simple:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.icon-box {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+/* 分页 */
+.pagination-container {
+  margin-top: auto;
+  padding-top: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #ebeef5;
+}
+
+.pagination-info {
+  font-size: 13px;
+  color: #909399;
+}
+
+/* 通用工具类 */
+.mr-1 { margin-right: 4px; }
+.mr-2 { margin-right: 8px; }
+.ml-2 { margin-left: 8px; }
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+.w-full { width: 100%; }
+.cursor-pointer { cursor: pointer; }
+.text-primary { color: #409eff; }
+.text-success { color: #67c23a; }
+.text-warning { color: #e6a23c; }
+.text-danger { color: #f56c6c; }
+.text-info { color: #909399; }
+.bg-blue-100 { background-color: #ecf5ff; }
+.bg-danger { background-color: #f56c6c; }
+.overflow-hidden { overflow: hidden; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-40 { width: 10rem; }

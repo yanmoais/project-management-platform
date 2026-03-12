@@ -9,8 +9,6 @@ import WorkbenchView from '../views/Workbench/WorkbenchView.vue'
 import MySpaceView from '../views/MySpace/MySpaceView.vue'
 import ProjectMgtView from '../views/ProjectMgt/ProjectMgtView.vue'
 import RequirementMgtView from '../views/RequirementMgt/RequirementMgtView.vue'
-import DevelopmentMgtView from '../views/DevelopmentMgt/DevelopmentMgtView.vue'
-import TransferDeploymentView from '../views/TransferDeployment/TransferDeploymentView.vue'
 import QualityMgtView from '../views/QualityMgt/QualityMgtView.vue'
 import UserAcceptanceView from '../views/UserAcceptance/UserAcceptanceView.vue'
 import ProductionMgtView from '../views/ProductionMgt/ProductionMgtView.vue'
@@ -34,6 +32,7 @@ import MenuView from '../views/System/MenuView.vue'
 import DeptView from '../views/System/DeptView.vue'
 import PostView from '../views/System/PostView.vue'
 import NoticeView from '../views/System/NoticeView.vue'
+import AutomationAssistant from '../views/System/AutomationAssistant.vue'
 
 const routes = [
   {
@@ -70,25 +69,52 @@ const routes = [
         path: 'requirement',
         name: 'RequirementMgt',
         component: RequirementMgtView,
-        meta: { title: '需求管理' }
+        meta: { title: '需求管理', group: 'Requirement' }
       },
       {
-        path: 'development',
-        name: 'DevelopmentMgt',
-        component: DevelopmentMgtView,
-        meta: { title: '研发管理' }
-      },
-      {
-        path: 'deployment',
-        name: 'TransferDeployment',
-        component: TransferDeploymentView,
-        meta: { title: '移交部署' }
+        path: 'requirement/detail/:id',
+        name: 'RequirementDetail',
+        component: RequirementMgtView,
+        meta: { title: '需求详情', group: 'Requirement', activeMenu: '/requirement', hiddenTag: true }
       },
       {
         path: 'quality',
         name: 'QualityMgt',
-        component: QualityMgtView,
-        meta: { title: '质量管理' }
+        component: ParentView,
+        meta: { title: '质量管理' },
+        redirect: '/quality/defect',
+        children: [
+          {
+            path: 'defect',
+            name: 'DefectMgt',
+            component: QualityMgtView,
+            meta: { title: '缺陷管理', group: 'Defect' }
+          },
+          {
+            path: 'defect/detail/:id',
+            name: 'DefectDetail',
+            component: QualityMgtView,
+            meta: { title: '缺陷详情', group: 'Defect', activeMenu: '/quality/defect', hiddenTag: true }
+          },
+          {
+            path: 'plan',
+            name: 'TestPlan',
+            component: () => import('../views/TestMgt/TestPlanView.vue'),
+            meta: { title: '测试计划' }
+          },
+          {
+            path: 'case',
+            name: 'TestCase',
+            component: () => import('../views/TestMgt/TestCaseView.vue'),
+            meta: { title: '测试用例', group: 'TestCase' }
+          },
+          {
+            path: 'case/detail/:id',
+            name: 'TestCaseDetail',
+            component: () => import('../views/TestMgt/TestCaseView.vue'),
+            meta: { title: '测试用例详情', group: 'TestCase', activeMenu: '/quality/case', hiddenTag: true }
+          }
+        ]
       },
       {
         path: 'uat',
@@ -264,6 +290,12 @@ const routes = [
             name: 'NoticeManagement',
             component: NoticeView,
             meta: { title: '通知公告' }
+          },
+          {
+            path: 'automation-assistant',
+            name: 'AutomationAssistant',
+            component: AutomationAssistant,
+            meta: { title: '自动化助手' }
           }
         ]
       }

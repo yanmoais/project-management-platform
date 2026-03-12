@@ -14,6 +14,21 @@
       </div>
     </div>
 
+    <!-- 导入测试步骤抽屉 -->
+    <ImportTestStepsDrawer
+      v-model:visible="importDrawerVisible"
+      @import-steps="handleImportSteps"
+    />
+    
+    <!-- Excel导入隐藏输入框 -->
+    <input
+      type="file"
+      ref="excelInputRef"
+      accept=".xlsx, .xls"
+      style="display: none"
+      @change="onExcelFileSelected"
+    />
+
     <!-- 步骤列表 -->
     <div v-if="steps.length === 0" class="empty-container">
       <el-empty description="暂无测试步骤，请点击右侧按钮添加" />
@@ -21,7 +36,7 @@
 
     <div v-else class="step-list-container">
       <div 
-        v-for="(step, index) in steps" 
+        v-for="(step, index) in visibleSteps" 
         :key="step.id" 
         class="step-card-wrapper"
         :class="{ 'highlight-step': step.id === highlightedStepId }"
@@ -87,9 +102,28 @@
                 </el-form-item>
               </el-col>
 
-              <!-- Web操作特有：元素定位参数 或 验证码配置 -->
+              <!-- Web操作特有：元素定位参数 或 验证码配置 或 高级功能 -->
               <el-col :span="6" v-if="step.operation_type === 'web' && !isActionConfigurable(step.operation_event)">
-                <template v-if="step.operation_event !== 'solve_captcha'">
+                <template v-if="step.operation_event === 'repeat_step'">
+                  <el-form-item label="重复步骤" required>
+                     <el-select 
+                        v-model="step.repeat_step_ids" 
+                        multiple 
+                        collapse-tags
+                        placeholder="请选择要重复的步骤"
+                        style="width: 100%"
+                      >
+                        <el-option
+                          v-for="(s, idx) in steps"
+                          :key="s.id"
+                          :label="`步骤 ${idx + 1}: ${s.step_name || '未命名'}`"
+                          :value="s.id"
+                          :disabled="s.id === step.id" 
+                        />
+                      </el-select>
+                  </el-form-item>
+                </template>
+                <template v-else-if="step.operation_event !== 'solve_captcha'">
                   <el-form-item label="元素定位参数" required>
                     <el-input v-model="step.operation_params" :placeholder="getParamsPlaceholder(step.operation_event)" />
                   </el-form-item>
@@ -244,6 +278,11 @@
           <el-button type="primary" round :icon="CopyDocument" @click="copyStep(index, step)">复制步骤</el-button>
         </div>
       </div>
+      <!-- 懒加载触发器 -->
+      <div ref="loadMoreTrigger" class="load-more-trigger" style="height: 20px; margin-top: 10px; text-align: center; color: #909399;">
+        <span v-if="displayLimit < steps.length">加载更多...</span>
+        <span v-else>已显示全部步骤</span>
+      </div>
     </div>
 
     <!-- 配置占位弹窗 -->
@@ -309,13 +348,11 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, computed } from 'vue'
+import { ref, watch, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { 
   List, Plus, Download, Document, Delete, 
-  Rank, Top, Bottom, Setting, Upload, CopyDocument,
-  Message, Lock, Link as LinkIcon, InfoFilled,
-  Monitor, Picture, Cpu, UploadFilled
+  Top, Bottom, Setting, Upload, CopyDocument
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -327,6 +364,9 @@ import TabSwitchConfig from './TestStepConfigs/TabSwitchConfig.vue'
 import ObstructionConfig from './TestStepConfigs/ObstructionConfig.vue'
 import NoImgObstructionConfig from './TestStepConfigs/NoImgObstructionConfig.vue'
 import CaptchaConfig from './TestStepConfigs/CaptchaConfig.vue'
+import ImportTestStepsDrawer from './TestStepEditorComponents/ImportTestStepsDrawer.vue'
+import { useTestStepExcel } from './composables/useTestStepExcel'
+import { operationEvents } from '@/utils/stepConstants'
 
 const props = defineProps({
   modelValue: {
@@ -342,6 +382,53 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const steps = ref([])
+// 懒加载控制
+const displayLimit = ref(5)
+const loadMoreTrigger = ref(null)
+let observer = null
+
+const visibleSteps = computed(() => {
+  return steps.value.slice(0, displayLimit.value)
+})
+
+const initObserver = () => {
+  if (observer) observer.disconnect()
+  observer = new IntersectionObserver((entries) => {
+    if (entries[0].isIntersecting) {
+       loadMore()
+    }
+  }, {
+     root: null, // viewport
+     rootMargin: '200px', // Preload before reaching bottom
+     threshold: 0.1
+  })
+  if (loadMoreTrigger.value) {
+     observer.observe(loadMoreTrigger.value)
+  }
+}
+
+const loadMore = () => {
+  if (displayLimit.value < steps.value.length) {
+     displayLimit.value += 5
+  }
+}
+
+onMounted(() => {
+   initObserver()
+})
+
+onUnmounted(() => {
+  if (observer) observer.disconnect()
+})
+
+// 监听 trigger 元素变化以重新绑定观察器
+watch(loadMoreTrigger, (el) => {
+    if (el && observer) {
+        observer.disconnect()
+        observer.observe(el)
+    }
+})
+
 const configDialogVisible = ref(false)
 const configDialogTitle = ref('')
 const currentConfigType = ref('')
@@ -353,61 +440,6 @@ const isChildEditing = ref(false)
 const handleAssertionEditStatusChange = (isEditing) => {
   isChildEditing.value = isEditing
 }
-
-
-
-const tabNavigationSteps = computed(() => {
-  if (!currentConfigStep.value) return { steps: [], targetIndex: 2 }
-  
-  const navSteps = []
-  let currentTabIndex = 1
-  
-  // Add Base Step
-  navSteps.push({
-    name: '产品地址',
-    index: currentTabIndex,
-    isCurrent: false,
-    isJump: false
-  })
-  
-  const currentIndex = steps.value.indexOf(currentConfigStep.value)
-  if (currentIndex === -1) return { steps: navSteps, targetIndex: 2 }
-  
-  // Iterate up to current step
-  for (let i = 0; i <= currentIndex; i++) {
-    const step = steps.value[i]
-    // If it's a previous step and has jump enabled, it increments tab index
-    if (i < currentIndex && step.tab_switch_enabled === 'yes') {
-      currentTabIndex++
-      const isTemp = step.tab_switch_mode === 'temporary'
-      navSteps.push({
-        name: `测试步骤 ${i + 1}${isTemp ? ' (临时)' : ''}`,
-        index: currentTabIndex,
-        isCurrent: false,
-        isJump: true,
-        isTemporary: isTemp
-      })
-    }
-    
-    // If it's the current step (the one being configured), we assume it WILL jump if configured
-    if (i === currentIndex) {
-      currentTabIndex++ // The jump target for current step
-      const isTemp = currentConfigStep.value.tab_switch_mode === 'temporary'
-      navSteps.push({
-        name: `测试步骤 ${i + 1}${isTemp ? ' (临时)' : ''}`,
-        index: currentTabIndex,
-        isCurrent: true,
-        isJump: true,
-        isTemporary: isTemp
-      })
-    }
-  }
-  
-  return {
-    steps: navSteps,
-    targetIndex: currentTabIndex
-  }
-})
 
 const setStepRef = (el, id) => {
   if (el) {
@@ -421,36 +453,7 @@ const clearHighlight = (id) => {
   }
 }
 
-// 操作事件枚举值分类
-const operationEvents = [
-  {
-    label: '基础交互',
-    options: [
-      { label: '单击', value: 'click' },
-      { label: '双击', value: 'double_click' },
-      { label: '输入', value: 'input' },
-      { label: '悬停', value: 'hover' }
-    ]
-  },
-  {
-    label: '表单操作',
-    options: [
-      { label: '勾选', value: 'check' },
-      { label: '取消勾选', value: 'uncheck' },
-      { label: '选择下拉项', value: 'select_option' }
-    ]
-  },
-  {
-    label: '高级操作',
-    options: [
-      { label: '拖拽到元素', value: 'drag_and_drop' },
-      { label: '按键', value: 'press_key' },
-      { label: '登录', value: 'login' },
-      { label: '注册', value: 'register' },
-      { label: '验证码识别', value: 'solve_captcha' }
-    ]
-  }
-]
+
 
 // 初始化步骤字段
 const initStepFields = (step, index) => {
@@ -463,7 +466,7 @@ const initStepFields = (step, index) => {
   step.pause_time = Number(step.pause_time) || 1
   
   if (!step.tab_switch_enabled) step.tab_switch_enabled = 'no'
-  if (!step.tab_switch_mode) step.tab_switch_mode = 'permanent'
+  if (!step.tab_switch_mode) step.tab_switch_mode = 'new_tab'
   if (!step.assertion_enabled) step.assertion_enabled = 'no'
   if (!step.screenshot_enabled) step.screenshot_enabled = 'no'
   if (!step.blocker_enabled) step.blocker_enabled = 'no'
@@ -475,6 +478,7 @@ const initStepFields = (step, index) => {
   // 补充完整字段定义
   if (!step.input_value) step.input_value = ''
   if (!step.operation_params) step.operation_params = ''
+  if (!step.repeat_step_ids) step.repeat_step_ids = [] // 新增重复步骤ID数组
   
   // 标签页相关
   if (!step.tab_switch_action) step.tab_switch_action = 'no'
@@ -513,6 +517,9 @@ const getParamsPlaceholder = (event) => {
   if (event === 'solve_captcha') {
     return '请输入验证码的元素定位参数（如 xpath=//img[@id="code"]）'
   }
+  if (event === 'assert_element_not_exists') {
+    return '请输入需要断言不存在的元素定位参数（如 id=ad_banner）'
+  }
   return '请输入元素定位参数 (如: id=button1)'
 }
 
@@ -532,7 +539,11 @@ const isInputValueVisible = (event) => {
 }
 
 watch(() => props.modelValue, (val) => {
-  steps.value = val || []
+  // 如果是新的数据引用（例如弹窗重新打开），重置显示限制
+  if (val !== steps.value) {
+      displayLimit.value = 5
+      steps.value = val || []
+  }
   // 确保每个步骤都有必要的字段，避免模板渲染报错
   steps.value.forEach((step, index) => {
     initStepFields(step, index)
@@ -569,6 +580,7 @@ const addStep = () => {
     captcha_retry_enabled: 'no',
     captcha_next_event: 'click',
     captcha_next_params: '',
+    repeat_step_ids: [],
     // 复杂对象
     assertion_config: { custom_assertions: [], image_assertions: [], ui_assertions: [] },
     screenshot_config: { format: 'png', full_page: false, path: 'screenshots/', prefix: 'screenshot_step', quality: 90, timing: 'after' },
@@ -586,6 +598,11 @@ const addStep = () => {
     auth_regen_on_open: false
   }
   steps.value.push(newStep)
+  
+  // 确保新添加的步骤可见
+  if (steps.value.length > displayLimit.value) {
+      displayLimit.value = steps.value.length
+  }
 }
 
 const removeStep = (index) => {
@@ -618,6 +635,11 @@ const copyStep = (index, step) => {
   newStep.step_name = null // Clear step name
   steps.value.push(newStep)
   ElMessage.success('复制步骤成功')
+
+  // 确保新步骤可见
+  if (steps.value.length > displayLimit.value) {
+      displayLimit.value = steps.value.length
+  }
 
   // 设置高亮并滚动到新步骤
   highlightedStepId.value = newStep.id
@@ -718,9 +740,17 @@ const validateCaptchaConfig = (step) => {
 const validateTabSwitchConfig = (step) => {
   const errors = []
   if (!step.tab_switch_mode) errors.push('标签页跳转方式')
-  if (step.tab_switch_mode !== 'temporary' && !step.tab_target_url) {
+  
+  // new_tab (或旧的 permanent) 模式下需要网址
+  if ((step.tab_switch_mode === 'new_tab' || step.tab_switch_mode === 'permanent') && !step.tab_target_url) {
     errors.push('目标标签页网址')
   }
+  
+  // switch_tab 模式下需要索引
+  if (step.tab_switch_mode === 'switch_tab' && !step.tab_target_index) {
+    errors.push('目标标签页索引')
+  }
+  
   return errors
 }
 
@@ -737,9 +767,15 @@ const validateStep = (step) => {
     
     // 常规Web操作 (非配置型且非验证码)
     if (!isActionConfigurable(step.operation_event) && step.operation_event !== 'solve_captcha') {
-       if (!step.operation_params) errors.push('元素定位参数')
-       if (isInputValueVisible(step.operation_event) && !step.input_value) {
-          errors.push('操作参数值')
+       if (step.operation_event === 'repeat_step') {
+          if (!step.repeat_step_ids || step.repeat_step_ids.length === 0) {
+              errors.push('重复步骤')
+          }
+       } else {
+          if (!step.operation_params) errors.push('元素定位参数')
+          if (isInputValueVisible(step.operation_event) && !step.input_value) {
+              errors.push('操作参数值')
+          }
        }
     }
     
@@ -777,6 +813,11 @@ const validateAllSteps = () => {
      const step = steps.value[i]
      const errors = validateStep(step)
      if (errors.length > 0) {
+        // 如果错误步骤不可见，先展开
+        if (i >= displayLimit.value) {
+            displayLimit.value = i + 1 + 5 // 展开到该步骤并多预留一点
+        }
+        
         // 滚动到错误步骤
         highlightedStepId.value = step.id
         nextTick(() => {
@@ -896,9 +937,51 @@ const saveConfig = async () => {
   ElMessage.success('配置已保存')
 }
 
-const handleImport = () => ElMessage.info('功能开发中：导入测试步骤')
-const handleExcelImport = () => ElMessage.info('功能开发中：Excel导入测试步骤')
-const handleDownloadTemplate = () => ElMessage.info('功能开发中：下载模板')
+// --- Excel 导入/导出 ---
+const { downloadTemplate, importExcel } = useTestStepExcel()
+const excelInputRef = ref(null)
+
+const handleDownloadTemplate = () => {
+  downloadTemplate()
+}
+
+const handleExcelImport = () => {
+  if (excelInputRef.value) {
+    excelInputRef.value.value = '' // 清空以便重复选择
+    excelInputRef.value.click()
+  }
+}
+
+const onExcelFileSelected = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  
+  try {
+    const newSteps = await importExcel(file)
+    if (newSteps && newSteps.length > 0) {
+      steps.value.push(...newSteps)
+      ElMessage.success(`成功导入 ${newSteps.length} 个测试步骤`)
+      // Excel导入通常较多，保持懒加载状态，不强制展开
+    }
+  } catch {
+    // Error handled in composable
+  }
+}
+
+// --- 导入测试步骤相关逻辑 ---
+const importDrawerVisible = ref(false)
+
+const handleImport = () => {
+  importDrawerVisible.value = true
+}
+
+const handleImportSteps = (newSteps) => {
+  steps.value.push(...newSteps)
+  ElMessage.success(`成功导入 ${newSteps.length} 个测试步骤`)
+  // 确保导入的步骤可见（如果数量不多的话，否则用户自己滚动加载）
+  // 这里选择不自动展开全部，避免一次性渲染太多
+  if (displayLimit.value < 5) displayLimit.value = 5 // 至少确保有东西显示
+}
 
 </script>
 
@@ -1395,4 +1478,6 @@ export default {
   margin-top: 10px;
   color: #909399;
 }
+
+/* 导入测试步骤相关样式 */
 </style>

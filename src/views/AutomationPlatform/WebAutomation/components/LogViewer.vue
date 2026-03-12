@@ -1,11 +1,11 @@
 <template>
-  <el-dialog
+  <el-drawer
     v-model="dialogVisible"
     title="执行日志详情"
-    width="80%"
-    top="5vh"
+    size="55%"
+    direction="rtl"
     destroy-on-close
-    class="log-dialog"
+    class="log-drawer"
     append-to-body
     @close="handleClose"
   >
@@ -121,25 +121,47 @@
     <div v-else class="loading-container">
       暂无日志数据
     </div>
-  </el-dialog>
+  </el-drawer>
 
   <!-- 图片预览弹窗 -->
   <el-dialog
     v-model="imageDialogVisible"
     title="图片预览"
-    width="60%"
+    width="70%"
+    top="5vh"
     append-to-body
     class="image-preview-dialog"
   >
-    <div class="image-preview-container" style="text-align: center;">
-      <img :src="currentImageUrl" alt="Screenshot" style="max-width: 100%; max-height: 70vh; object-fit: contain;" />
+    <div class="image-controls">
+      <el-button-group>
+        <el-button :icon="ZoomOut" @click="handleZoomOut" title="缩小" />
+        <el-button :icon="RefreshLeft" @click="handleResetZoom" title="重置" />
+        <el-button :icon="ZoomIn" @click="handleZoomIn" title="放大" />
+      </el-button-group>
+      <span class="scale-info">{{ Math.round(imageScale * 100) }}%</span>
+    </div>
+    <div 
+      class="image-preview-container"
+      @mousedown="handleMouseDown"
+      @mousemove="handleMouseMove"
+      @mouseup="handleMouseUp"
+      @mouseleave="handleMouseUp"
+      :style="{ cursor: isDragging ? 'grabbing' : 'grab' }"
+    >
+      <img 
+        :src="currentImageUrl" 
+        alt="Screenshot" 
+        :style="{ transform: `translate(${translateX}px, ${translateY}px) scale(${imageScale})`, transition: isDragging ? 'none' : 'transform 0.2s ease' }"
+        class="preview-image"
+        draggable="false"
+      />
     </div>
   </el-dialog>
 </template>
 
 <script setup>
 import { ref, watch, computed } from 'vue'
-import { VideoPlay, Picture } from '@element-plus/icons-vue'
+import { VideoPlay, Picture, ZoomIn, ZoomOut, RefreshLeft } from '@element-plus/icons-vue'
 
 const props = defineProps({
   visible: {
@@ -162,7 +184,53 @@ const dialogVisible = computed({
 const activeSteps = ref([])
 const imageDialogVisible = ref(false)
 const currentImageUrl = ref('')
+const imageScale = ref(1.0)
+const isDragging = ref(false)
+const startX = ref(0)
+const startY = ref(0)
+const translateX = ref(0)
+const translateY = ref(0)
+
+const handleMouseDown = (e) => {
+  if (e.button !== 0) return
+  isDragging.value = true
+  startX.value = e.clientX - translateX.value
+  startY.value = e.clientY - translateY.value
+}
+
+const handleMouseMove = (e) => {
+  if (!isDragging.value) return
+  e.preventDefault()
+  translateX.value = e.clientX - startX.value
+  translateY.value = e.clientY - startY.value
+}
+
+const handleMouseUp = () => {
+  isDragging.value = false
+}
 const activeTab = ref('all')
+
+const handleZoomIn = () => {
+  imageScale.value = Math.min(imageScale.value + 0.25, 3.0)
+}
+
+const handleZoomOut = () => {
+  imageScale.value = Math.max(imageScale.value - 0.25, 0.25)
+}
+
+const handleResetZoom = () => {
+  imageScale.value = 1.0
+  translateX.value = 0
+  translateY.value = 0
+}
+
+watch(imageDialogVisible, (val) => {
+  if (val) {
+    imageScale.value = 1.0
+    translateX.value = 0
+    translateY.value = 0
+  }
+})
 
 const testMethodsCount = computed(() => {
   if (props.logData?.method_logs && props.logData.method_logs.length > 0) {
@@ -445,5 +513,43 @@ const viewImage = (path) => {
 .method-switcher :deep(.el-radio-button__inner:hover) {
   color: #fff;
   background-color: #3c3f41;
+}
+
+.image-controls {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+  padding: 5px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+}
+
+.scale-info {
+  font-size: 14px;
+  color: #606266;
+  min-width: 45px;
+  text-align: center;
+}
+
+.image-preview-container {
+  width: 100%;
+  height: 70vh;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #f0f2f5;
+  border: 1px solid #dcdfe6;
+  user-select: none;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.2s ease;
+  transform-origin: center center;
 }
 </style>

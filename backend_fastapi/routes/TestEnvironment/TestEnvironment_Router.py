@@ -14,6 +14,51 @@ from .schemas import TestEnvironmentCreate, TestEnvironmentUpdate
 
 # Routes
 
+@router.get("/project_names")
+async def get_project_names(db: AsyncSession = Depends(get_db)):
+    try:
+        stmt = select(TestEnvironment.project_name).distinct()
+        result = await db.execute(stmt)
+        project_names = result.scalars().all()
+        return {'code': 200, 'msg': 'success', 'data': project_names}
+    except Exception as e:
+        log_info(f"Get project names error: {str(e)}")
+        return {'code': 500, 'msg': str(e), 'data': []}
+
+@router.get("/statistics")
+async def get_statistics(db: AsyncSession = Depends(get_db)):
+    try:
+        # Total count
+        stmt_all = select(func.count()).select_from(TestEnvironment)
+        total_result = await db.execute(stmt_all)
+        total = total_result.scalar() or 0
+
+        # SIT count
+        stmt_sit = select(func.count()).select_from(TestEnvironment).where(TestEnvironment.env_type == 'SIT')
+        sit_result = await db.execute(stmt_sit)
+        sit_count = sit_result.scalar() or 0
+
+        # UAT count
+        stmt_uat = select(func.count()).select_from(TestEnvironment).where(TestEnvironment.env_type == 'UAT')
+        uat_result = await db.execute(stmt_uat)
+        uat_count = uat_result.scalar() or 0
+
+        # PERF count
+        stmt_perf = select(func.count()).select_from(TestEnvironment).where(TestEnvironment.env_type == 'PERF')
+        perf_result = await db.execute(stmt_perf)
+        perf_count = perf_result.scalar() or 0
+
+        data = {
+            'total_count': total,
+            'sit_count': sit_count,
+            'uat_count': uat_count,
+            'perf_count': perf_count
+        }
+        return {'code': 200, 'msg': 'success', 'data': data}
+    except Exception as e:
+        log_info(f"Get environment statistics error: {str(e)}")
+        return {'code': 500, 'msg': str(e), 'data': {'total_count': 0, 'sit_count': 0, 'uat_count': 0, 'perf_count': 0}}
+
 @router.get("/list")
 async def get_list(
     page: int = Query(1, ge=1),

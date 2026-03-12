@@ -16,19 +16,19 @@ class Settings(BaseSettings):
     
     # 数据库配置
     # 注意：FastAPI 使用异步驱动 aiomysql
-    SQLALCHEMY_DATABASE_URI: str = 'mysql+aiomysql://root:123456@localhost/project_management_platform'
+    SQLALCHEMY_DATABASE_URI: str = 'mysql+aiomysql://root:123456@127.0.0.1/project_management_platform'
     
     # 多数据库绑定
     SQLALCHEMY_BINDS: Dict[str, str] = {
-        'automation': 'mysql+aiomysql://root:123456@localhost/automation'
+        'automation': 'mysql+aiomysql://root:123456@127.0.0.1/automation'
     }
 
     # Redis 配置
-    REDIS_URL: str = 'redis://localhost:6379/0'
+    REDIS_URL: str = 'redis://127.0.0.1:6379/0'
     
     # Celery 配置
-    CELERY_BROKER_URL: str = 'redis://localhost:6379/1'
-    CELERY_RESULT_BACKEND: str = 'redis://localhost:6379/2'
+    CELERY_BROKER_URL: str = 'redis://127.0.0.1:6379/1'
+    CELERY_RESULT_BACKEND: str = 'redis://127.0.0.1:6379/2'
     CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP: bool = True
 
     class Config:

@@ -32,18 +32,15 @@
           <el-icon><List /></el-icon>
           <template #title>需求管理</template>
         </el-menu-item>
-        <el-menu-item index="/development">
-          <el-icon><Cpu /></el-icon>
-          <template #title>研发管理</template>
-        </el-menu-item>
-        <el-menu-item index="/deployment">
-          <el-icon><Upload /></el-icon>
-          <template #title>移交部署</template>
-        </el-menu-item>
-        <el-menu-item index="/quality">
-          <el-icon><CircleCheck /></el-icon>
-          <template #title>质量管理</template>
-        </el-menu-item>
+        <el-sub-menu index="/quality">
+          <template #title>
+            <el-icon><CircleCheck /></el-icon>
+            <span>质量管理</span>
+          </template>
+          <el-menu-item index="/quality/defect">缺陷管理</el-menu-item>
+          <el-menu-item index="/quality/plan">测试计划</el-menu-item>
+          <el-menu-item index="/quality/case">测试用例</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/uat">
           <el-icon><Stamp /></el-icon>
           <template #title>用户验收</template>
@@ -100,6 +97,7 @@
           <el-menu-item index="/system/dept">部门管理</el-menu-item>
           <el-menu-item index="/system/post">岗位管理</el-menu-item>
           <el-menu-item index="/system/notice">通知公告</el-menu-item>
+          <el-menu-item index="/system/automation-assistant">自动化助手</el-menu-item>
         </el-sub-menu>
       </el-menu>
       </el-scrollbar>
@@ -126,6 +124,61 @@
           </el-breadcrumb>
         </div>
         <div class="header-right">
+            <el-popover
+              v-model:visible="notificationVisible"
+              placement="bottom"
+              :width="350"
+              trigger="click"
+              popper-class="notification-popover"
+              @show="handleNotificationShow"
+            >
+              <template #reference>
+                <div class="notification-badge">
+                  <el-badge :value="unreadCount" :max="99" :hidden="unreadCount === 0" class="item">
+                    <el-icon class="bell-icon"><Bell /></el-icon>
+                  </el-badge>
+                </div>
+              </template>
+              
+              <div class="notification-list-container" v-loading="notificationLoading">
+                <div class="notification-header">
+                  <span class="title">消息记录</span>
+                  <el-button link type="primary" size="small" @click="handleMarkAllRead">全部已读</el-button>
+                </div>
+                <el-scrollbar max-height="300px">
+                  <div v-if="notifications.length === 0" class="empty-notification">
+                    暂无通知
+                  </div>
+                  <div v-else class="notification-items">
+                    <div 
+                      v-for="item in notifications" 
+                      :key="item.notification_id" 
+                      class="notification-item"
+                      :class="{ 'is-read': item.is_read }"
+                      @click="handleRead(item)"
+                    >
+                      <div class="item-header">
+                        <span class="item-title">{{ item.title }}</span>
+                        <span class="item-time">{{ item.create_time?.substring(5, 16) }}</span>
+                      </div>
+                      <div class="item-content" v-html="item.content"></div>
+                      <div class="item-dot" v-if="!item.is_read"></div>
+                    </div>
+                  </div>
+                </el-scrollbar>
+                <div class="notification-footer" v-if="notificationTotal > 0">
+                  <el-pagination
+                    v-model:current-page="notificationPage"
+                    :page-size="notificationPageSize"
+                    :total="notificationTotal"
+                    layout="prev, pager, next"
+                    size="small"
+                    @current-change="handleNotificationPageChange"
+                  />
+                </div>
+              </div>
+            </el-popover>
+
             <span class="user-name">Welcome, {{ userStore.currentUser }}</span>
             <el-button type="danger" size="small" @click="handleLogout">退出</el-button>
         </div>
@@ -154,7 +207,7 @@
       <el-main class="layout-main">
         <router-view v-slot="{ Component }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" :key="route.path" />
+            <component :is="Component" :key="route.meta.group || route.path" />
           </transition>
         </router-view>
       </el-main>
@@ -163,14 +216,15 @@
 </template>
 
 <script setup>
-import { computed, ref, watch, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/Auth/user'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElNotification } from 'element-plus'
+import request from '@/utils/request'
 import {
   Odometer, User, Folder, List, Cpu, Upload,
   CircleCheck, Stamp, Promotion, Warning, Connection, VideoPlay, Setting,
-  Expand, Fold
+  Expand, Fold, Bell, Delete
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -181,7 +235,125 @@ const isCollapse = ref(false)
 const breadcrumbs = ref([])
 const tags = ref([])
 
-const activeMenu = computed(() => route.path)
+// Notification Logic
+const unreadCount = ref(0)
+const notifications = ref([])
+const notificationLoading = ref(false)
+const notificationVisible = ref(false)
+const notificationPage = ref(1)
+const notificationPageSize = ref(5)
+const notificationTotal = ref(0)
+let pollingTimer = null
+let lastUnreadCount = 0
+
+const fetchUnreadCount = async () => {
+  if (document.hidden) return // Stop polling if tab is not active
+
+  try {
+    const res = await request({
+      url: '/api/system/notification/unread-count',
+      method: 'get'
+    })
+    if (res.code === 200) {
+      const currentCount = res.data
+      // If count increased, show notification (skip on first load)
+      if (currentCount > lastUnreadCount && lastUnreadCount !== 0) {
+        // Fetch the latest notification to show details
+        fetchLatestAndNotify()
+      }
+      lastUnreadCount = currentCount
+      unreadCount.value = currentCount
+    }
+  } catch (error) {
+    console.error('Failed to fetch unread count', error)
+  }
+}
+
+const fetchLatestAndNotify = async () => {
+  try {
+    const res = await request({
+      url: '/api/system/notification/list',
+      method: 'get',
+      params: { page: 1, page_size: 1 }
+    })
+    if (res.code === 200 && res.data.items.length > 0) {
+      const latest = res.data.items[0]
+      // Check if this notification is actually new (created recently)
+      // For simplicity, just show it.
+      ElNotification({
+        title: latest.title,
+        message: latest.content.replace(/<[^>]+>/g, '').substring(0, 50) + '...', // Strip HTML
+        type: 'info',
+        duration: 2000,
+        position: 'top-right'
+      })
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+const fetchNotifications = async () => {
+  notificationLoading.value = true
+  try {
+    const res = await request({
+      url: '/api/system/notification/list',
+      method: 'get',
+      params: { 
+        page: notificationPage.value, 
+        page_size: notificationPageSize.value 
+      }
+    })
+    if (res.code === 200) {
+      notifications.value = res.data.items
+      notificationTotal.value = res.data.total
+    }
+  } finally {
+    notificationLoading.value = false
+  }
+}
+
+const handleNotificationPageChange = (val) => {
+  notificationPage.value = val
+  fetchNotifications()
+}
+
+const handleNotificationShow = () => {
+  notificationPage.value = 1 // Reset to first page
+  fetchNotifications()
+}
+
+const handleMarkAllRead = async () => {
+  try {
+    await request({
+      url: '/api/system/notification/read-all',
+      method: 'put'
+    })
+    unreadCount.value = 0
+    lastUnreadCount = 0
+    fetchNotifications()
+    ElMessage.success('全部已读')
+  } catch (error) {
+    // ignore
+  }
+}
+
+const handleRead = async (item) => {
+  if (item.is_read) return
+  try {
+    await request({
+      url: `/api/system/notification/${item.notification_id}/read`,
+      method: 'put'
+    })
+    item.is_read = 1
+    if (unreadCount.value > 0) unreadCount.value--
+    lastUnreadCount = unreadCount.value
+  } catch (error) {
+    // ignore
+  }
+}
+
+const activeMenu = computed(() => route.meta.activeMenu || route.path)
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
@@ -205,6 +377,28 @@ const getBreadcrumb = () => {
 const addTags = () => {
   const { name } = route
   if (name && route.meta.title) {
+    // Check if we should use activeMenu instead (for detail pages)
+    if (route.meta.activeMenu) {
+      const targetPath = route.meta.activeMenu
+      // Resolve the activeMenu route to get its title
+      const resolved = router.resolve(targetPath)
+      
+      if (resolved && resolved.meta && resolved.meta.title) {
+        const isExist = tags.value.some(item => item.path === targetPath)
+        if (!isExist) {
+          tags.value.push({
+            title: resolved.meta.title,
+            path: targetPath,
+            name: resolved.name,
+            fullPath: targetPath
+          })
+        }
+        return // Don't add the current route
+      }
+    }
+
+    if (route.meta.hiddenTag) return
+
     const isExist = tags.value.some(item => item.path === route.path)
     if (!isExist) {
       tags.value.push({
@@ -218,7 +412,7 @@ const addTags = () => {
 }
 
 const isActive = (tag) => {
-  return tag.path === route.path
+  return tag.path === route.path || tag.path === route.meta.activeMenu
 }
 
 const isAffix = (tag) => {
@@ -261,6 +455,12 @@ watch(
 onMounted(() => {
   getBreadcrumb()
   addTags()
+  fetchUnreadCount()
+  pollingTimer = setInterval(fetchUnreadCount, 30000) // Poll every 30 seconds
+})
+
+onUnmounted(() => {
+  if (pollingTimer) clearInterval(pollingTimer)
 })
 </script>
 
@@ -381,5 +581,105 @@ onMounted(() => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.notification-badge {
+  margin-right: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  margin-top: 5px;
+}
+.bell-icon {
+  font-size: 20px;
+  color: #606266;
+}
+.bell-icon:hover {
+  color: #409EFF;
+}
+
+/* Notification List */
+.notification-list-container {
+  padding: 0;
+}
+.notification-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  border-bottom: 1px solid #EBEEF5;
+}
+.notification-header .title {
+  font-weight: bold;
+  font-size: 13px;
+}
+.empty-notification {
+  padding: 20px;
+  text-align: center;
+  color: #909399;
+}
+.notification-item {
+  padding: 10px 15px;
+  border-bottom: 1px solid #EBEEF5;
+  cursor: pointer;
+  position: relative;
+  transition: background-color 0.2s;
+}
+.notification-item:hover {
+  background-color: #F5F7FA;
+}
+.notification-item.is-read {
+  opacity: 0.7;
+  background-color: #fafafa;
+}
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+.item-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: #303133;
+}
+.item-time {
+  font-size: 12px;
+  color: #909399;
+}
+.item-content {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.4;
+}
+.item-content :deep(p) {
+  margin: 2px 0;
+}
+.item-dot {
+  position: absolute;
+  top: 15px;
+  left: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #F56C6C;
+}
+/* Adjust padding for dot */
+.notification-item {
+  padding-left: 15px;
+}
+.notification-item:has(.item-dot) {
+  padding-left: 15px;
+}
+.notification-footer {
+  padding: 5px 15px;
+  border-top: 1px solid #EBEEF5;
+  display: flex;
+  justify-content: center;
+}
+</style>
+
+<style>
+.notification-popover {
+  padding: 0 !important;
 }
 </style>

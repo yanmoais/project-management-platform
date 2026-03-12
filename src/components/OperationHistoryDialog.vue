@@ -1,8 +1,8 @@
 <template>
-  <el-dialog
+  <el-drawer
     :title="title"
     :model-value="visible"
-    width="800px"
+    size="37%"
     @update:model-value="handleUpdateVisible"
   >
     <el-table :data="logs" v-loading="loading" border style="width: 100%">
@@ -16,15 +16,21 @@
       <el-table-column prop="change_content" label="变更内容" min-width="200" show-overflow-tooltip />
       <el-table-column prop="operation_time" label="操作时间" width="180" />
     </el-table>
+    
     <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="closeDialog">关闭</el-button>
-      </span>
+      <CommonPagination
+        v-model:current-page="currentPageModel"
+        v-model:page-size="pageSizeModel"
+        :total="total"
+        @change="handlePaginationChange"
+      />
     </template>
-  </el-dialog>
+  </el-drawer>
 </template>
 
 <script setup>
+import { computed, ref } from 'vue'
+import CommonPagination from './CommonPagination.vue'
 
 const props = defineProps({
   visible: {
@@ -42,17 +48,39 @@ const props = defineProps({
   loading: {
     type: Boolean,
     default: false
+  },
+  total: {
+    type: Number,
+    default: 0
+  },
+  currentPage: {
+    type: Number,
+    default: 1
+  },
+  pageSize: {
+    type: Number,
+    default: 10
   }
 })
 
-const emit = defineEmits(['update:visible'])
+const emit = defineEmits(['update:visible', 'update:currentPage', 'update:pageSize', 'change'])
+
+const currentPageModel = computed({
+  get: () => props.currentPage,
+  set: (val) => emit('update:currentPage', val)
+})
+
+const pageSizeModel = computed({
+  get: () => props.pageSize,
+  set: (val) => emit('update:pageSize', val)
+})
 
 const handleUpdateVisible = (val) => {
   emit('update:visible', val)
 }
 
-const closeDialog = () => {
-  emit('update:visible', false)
+const handlePaginationChange = () => {
+  emit('change')
 }
 </script>
 

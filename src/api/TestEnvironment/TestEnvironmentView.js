@@ -37,3 +37,17 @@ export function getEnvironmentLogs(env_id) {
     method: 'get'
   })
 }
+
+export function getProjectNames() {
+  return request({
+    url: '/api/environment/project_names',
+    method: 'get'
+  })
+}
+
+export function getEnvironmentStatistics() {
+  return request({
+    url: '/api/environment/statistics',
+    method: 'get'
+  })
+}

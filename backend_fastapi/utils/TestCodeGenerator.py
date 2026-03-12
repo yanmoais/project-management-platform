@@ -151,27 +151,80 @@ async def test_{safe_pid}(browser_args):
                 raise Exception("BROWSER_CLOSED_BY_USER")
 '''
         
-        # Generate steps
-        i = 0
-        current_tab_index = 1
-        while i < len(test_steps):
-            step = test_steps[i]
-            
-            # Calculate tab index for this step
-            tab_switch_enabled = step.get('tab_switch_enabled', 'no')
-            tab_switch_mode = step.get('tab_switch_mode', 'permanent')
-            target_tab_index = current_tab_index
-            
-            if tab_switch_enabled == 'yes':
-                target_tab_index = current_tab_index + 1
-            
-            method_code += TestCodeGenerator._generate_step_code(i + 1, step, safe_pid, product_address, current_tab_index, target_tab_index)
-            
-            # Update global tab index if permanent switch occurred
-            if tab_switch_enabled == 'yes' and tab_switch_mode == 'permanent':
-                current_tab_index += 1
+        # Helper to generate steps recursively
+        def generate_steps_code(steps, current_tab_index, tab_context):
+            code_str = ""
+            i = 0
+            while i < len(steps):
+                step = steps[i]
                 
-            i += 1
+                # Check for repeat_step
+                if step.get('operation_event') == 'repeat_step':
+                     repeat_ids = step.get('repeat_step_ids', [])
+                     if repeat_ids:
+                         # Find steps to repeat from the full list (passed implicitly or we need to pass full list)
+                         # Actually we need the full list to lookup IDs. 
+                         # But wait, test_steps is available in the outer scope.
+                         
+                         # Filter steps that match IDs and preserve order of IDs
+                         steps_to_repeat = []
+                         step_map = {s['id']: s for s in test_steps} # Map all available steps
+                         for rid in repeat_ids:
+                             if rid in step_map:
+                                 steps_to_repeat.append(step_map[rid])
+                         
+                         if steps_to_repeat:
+                             code_str += f'''
+            # --- 开始执行重复步骤 (源步骤: {step.get('step_name')}) ---
+            with allure.step("测试步骤{i + 1}: {step.get('step_name')} (重复步骤)"):
+                log_info(f"[{{task_id}}] 开始测试步骤{i + 1} {step.get('step_name')} (重复步骤) 的操作==============")
+'''
+                             # Recursively generate code for repeated steps
+                             # Note: Tab index management might get tricky if repeated steps switch tabs
+                             # For simplicity, we pass current_tab_index and let it flow, but we need to capture the returned index
+                             repeated_code, new_tab_idx = generate_steps_code(steps_to_repeat, current_tab_index, tab_context)
+                             # Indent the repeated code to be inside the with allure.step block
+                             indented_code = ""
+                             for line in repeated_code.split('\n'):
+                                 if line.strip():
+                                     indented_code += "    " + line + "\n"
+                                 else:
+                                     indented_code += "\n"
+                             code_str += indented_code
+                             current_tab_index = new_tab_idx
+                             code_str += f'''
+                log_info(f"[{{task_id}}] 重复步骤 {step.get('step_name')} (重复步骤) 执行完成")
+            # --- 结束执行重复步骤 ---
+'''
+                else:
+                    # Normal step generation
+                    # Calculate tab index for this step
+                    tab_switch_enabled = step.get('tab_switch_enabled', 'no')
+                    tab_switch_mode = step.get('tab_switch_mode', 'permanent')
+                    target_tab_index = current_tab_index
+                    
+                    if tab_switch_enabled == 'yes':
+                        target_tab_index = current_tab_index + 1
+                    
+                    code_str += TestCodeGenerator._generate_step_code(i + 1, step, safe_pid, product_address, current_tab_index, target_tab_index, tab_context)
+                    
+                    # Update global tab index if permanent switch occurred
+                    if tab_switch_enabled == 'yes' and tab_switch_mode == 'permanent':
+                        current_tab_index += 1
+                
+                i += 1
+            return code_str, current_tab_index
+
+        # Initialize tab tracking context
+        # index 1 is the initial product address
+        tab_context = {
+            'max_index': 1,
+            'urls': {1: product_address}
+        }
+
+        # Generate main steps
+        steps_code, _ = generate_steps_code(test_steps, 1, tab_context)
+        method_code += steps_code
             
         method_code += f'''
             # 输出图片识别统计信息
@@ -214,10 +267,10 @@ async def test_{safe_pid}(browser_args):
             # 测试步骤{index} & {index+1}: 验证码智能重试 ({step_name} + {next_step_name})
             with allure.step("测试步骤{index}-{index+1}: 验证码识别与登录 (智能重试)"):
                 log_info(f"[{{task_id}}] 开始测试步骤{index}-{index+1}: 验证码识别与登录 (智能重试)")
-                log_info(f"[{{task_id}}] 开始验证码智能重试流程 (最大3次)")
+                log_info(f"[{{task_id}}] 开始验证码智能重试流程 (最大5次)")
                 
                 captcha_retry_success = False
-                for captcha_attempt in range(3):
+                for captcha_attempt in range(5):
                     try:
                         log_info(f"[{{task_id}}] 第 {{captcha_attempt + 1}} 次尝试验证码流程")
                         
@@ -231,7 +284,7 @@ async def test_{safe_pid}(browser_args):
                         {invoke_next}
                         
                         # 3. 检查结果 (等待验证码错误提示或URL变化)
-                        if await ui_operations.check_captcha_result("验证码错误"):
+                        if await ui_operations.check_captcha_result():
                             captcha_retry_success = True
                             log_info(f"[{{task_id}}] 验证码流程成功")
                             break
@@ -258,7 +311,7 @@ async def test_{safe_pid}(browser_args):
         return code
 
     @staticmethod
-    def _generate_step_code(index, step, safe_pid, product_address, current_tab_index=1, target_tab_index=1):
+    def _generate_step_code(index, step, safe_pid, product_address, current_tab_index=1, target_tab_index=1, tab_context=None):
         step_name = step.get('step_name', f'step_{index}')
         operation_type = step.get('operation_type', 'web')
         operation_event = step.get('operation_event', 'click')
@@ -296,35 +349,77 @@ async def test_{safe_pid}(browser_args):
         
         # Tab switch logic
         tab_switch_enabled = step.get('tab_switch_enabled', 'no')
-        tab_switch_mode = step.get('tab_switch_mode', 'permanent')
-        tab_target_url = step.get('tab_target_url', '')
+        tab_switch_mode = step.get('tab_switch_mode', 'new_tab') # new_tab | switch_tab
         
+        # 兼容旧数据 permanent/temporary
+        if tab_switch_mode == 'permanent':
+            tab_switch_mode = 'new_tab'
+        elif tab_switch_mode == 'temporary':
+            tab_switch_mode = 'switch_tab'
+            # 旧的 temporary 逻辑是自动切回原处，但现在需要显式指定
+            # 如果没有 tab_target_index，则默认切回上一级？或者由前端保证数据正确
+            # 这里暂时不处理 target_tab_index 的默认值，依赖前端输入
+
+        tab_target_url = step.get('tab_target_url', '')
+        tab_target_index = step.get('tab_target_index')
+
         if tab_switch_enabled == 'yes':
-            code += f'''                
-                # 标签页跳转 (模式: {tab_switch_mode})
-                log_info(f"[{{task_id}}] 正在切换到标签页索引: {target_tab_index}")
-                await ui_operations.switch_to_tab_by_index({target_tab_index})
+            if tab_switch_mode == 'new_tab':
+                 # 如果上下文存在，记录新标签页的URL
+                 if tab_context:
+                     tab_context['max_index'] += 1
+                     new_idx = tab_context['max_index']
+                     tab_context['urls'][new_idx] = tab_target_url
+
+                 code += f'''                
+                # 标签页跳转 (模式: 打开新标签页)
+                log_info(f"[{{task_id}}] 打开新标签页并导航到: {tab_target_url}")
+                await ui_operations.open_new_tab_and_navigate("{tab_target_url}")
 '''
-            # 如果配置了URL，额外验证一下URL是否匹配（作为可选断言）
-            if tab_target_url:
-                code += f'''                
+                 # 验证跳转后的URL
+                 if tab_target_url:
+                     code += f'''                
                 # 验证跳转后的URL
-                with allure.step("[{{task_id}}] 测试步骤{index}: 验证目标URL"):
+                with allure.step(f"[{{task_id}}] 测试步骤{index}: 验证目标URL"):
                     await ui_operations.url_assert_exists("{tab_target_url}")
 '''
+            elif tab_switch_mode == 'switch_tab':
+                # 如果没有指定 index，使用 target_tab_index (旧逻辑计算的) 或者默认 1
+                final_index = tab_target_index if tab_target_index else target_tab_index
+                
+                # 尝试获取目标URL用于验证
+                target_url_check = ""
+                if tab_context and final_index:
+                    target_url = tab_context['urls'].get(int(final_index), '')
+                    if target_url:
+                        target_url_check = f', url="{target_url}"'
+
+                code += f'''                
+                # 标签页跳转 (模式: 切换到已有标签页)
+                log_info(f"[{{task_id}}] 正在切换到标签页索引: {final_index}")
+                await ui_operations.switch_to_tab_by_index({final_index}{target_url_check})
+'''
         
-        # 公共断言：断言元素是否存在 (仅在 operation_type 为 web 且非 login/register 且 operation_params 不为空时)
-        if operation_type == 'web' and operation_event not in ['login', 'register'] and operation_params:
+        # 公共断言：断言元素是否存在 (仅在 operation_type 为 web 且非 login/register/assert_element_not_exists 且 operation_params 不为空时)
+        if operation_type == 'web' and operation_event not in ['login', 'register', 'assert_element_not_exists'] and operation_params:
              code += f'''
                 # 公共断言方法，断言元素是否存在
-                with allure.step("[{{task_id}}] 测试步骤{index}: 公共断言元素是否存在"):
+                with allure.step(f"[{{task_id}}] 测试步骤{index}: 公共断言元素是否存在"):
                     await ui_operations.elem_assert_exists("{operation_params}")
+'''
+        # 断言元素不存在 (assert_element_not_exists)
+        if operation_type == 'web' and operation_event == 'assert_element_not_exists' and operation_params:
+             code += f'''
+                # 断言元素不存在
+                with allure.step(f"[{{task_id}}] 测试步骤{index}: 断言元素不存在 {operation_params}"):
+                    log_info(f"[{{task_id}}] 执行断言元素不存在: {operation_params}")
+                    await ui_operations.elem_assert_not_exists("{operation_params}")
 '''
 
         # Before Screenshot
         if screenshot_enabled == 'YES' and screenshot_timing in ['before', 'both']:
             code += f'''
-                with allure.step("[{{task_id}}] 测试步骤{index}: 步骤前截图"):
+                with allure.step(f"[{{task_id}}] 测试步骤{index}: 步骤前截图"):
                     await ui_operations.page_screenshot(f"test_{safe_pid}","test_step_{index}_before")
 '''
 
@@ -384,9 +479,9 @@ async def test_{safe_pid}(browser_args):
                 if captcha_retry_enabled == 'yes':
                     # 开启重试：生成重试循环代码块
                     code += f'''
-                        # 验证码智能重试流程 (最大3次)
+                        # 验证码智能重试流程 (最大10次)
                         captcha_retry_success = False
-                        for captcha_attempt in range(3):
+                        for captcha_attempt in range(10):
                             try:
                                 log_info(f"[{{task_id}}] 第 {{captcha_attempt + 1}} 次尝试验证码流程")
                                 
@@ -400,7 +495,7 @@ async def test_{safe_pid}(browser_args):
                                 {invoke_next}
                                 
                                 # 3. 检查结果
-                                if await ui_operations.check_captcha_result("验证码错误"):
+                                if await ui_operations.check_captcha_result():
                                     captcha_retry_success = True
                                     log_info(f"[{{task_id}}] 验证码流程成功")
                                     break
@@ -415,12 +510,12 @@ async def test_{safe_pid}(browser_args):
                                     raise Exception("BROWSER_CLOSED_BY_USER")
                                     
                                 log_info(f"[{{task_id}}] 尝试 {{captcha_attempt + 1}} 发生异常: {{e}}")
-                                if captcha_attempt == 2:
+                                if captcha_attempt == 9:
                                     raise e
                                 time.sleep(1)
 
                         if not captcha_retry_success:
-                            raise Exception("验证码智能重试流程失败")
+                            raise Exception("验证码智能重试流程失败，10次尝试均失败")
 '''
                     # 为了兼容外层循环结构，这里不需要额外的invoke，因为都在上面执行了
                     invoke = 'pass # 验证码流程已在上方执行'
@@ -433,6 +528,9 @@ async def test_{safe_pid}(browser_args):
                         # 2. 执行登录操作
                         {invoke_next}
 '''
+            elif operation_event == 'assert_element_not_exists':
+                # 断言已在上方执行，此处为空操作，避免进入下方异常
+                invoke = 'pass # 断言元素不存在已在上方执行'
             else:
                 # Click, etc.
                 invoke = f'await ui_operations.elem_{operation_event}("{operation_params}")'
@@ -467,7 +565,7 @@ async def test_{safe_pid}(browser_args):
                         except: pass
 '''
         code += '''                        raise e
-                time.sleep(1)
+                time.sleep(4)
 '''
 
         # Temporary tab close logic (AFTER operation loop)

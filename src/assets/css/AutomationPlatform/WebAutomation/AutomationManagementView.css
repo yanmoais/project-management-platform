@@ -1,0 +1,124 @@
+@import "../../common/layout.css";
+
+.automation-management-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 禁用 layout-container 的滚动，避免双重滚动条 */
+.automation-management-view .layout-container {
+  overflow: hidden;
+}
+
+.project-groups {
+  flex: 1;
+  padding: 0;
+  overflow-y: auto; /* 让列表区域独立滚动 */
+}
+
+.group-section-collapse {
+  padding: 0;
+}
+
+.right-content {
+  /* 移除 overflow-y: auto，使用 layout.css 的 overflow: hidden */
+  min-width: 500px !important;
+}
+
+/* Customize Collapse Header to look cleaner */
+.group-section-collapse .el-collapse {
+  border-top: none;
+  border-bottom: none;
+}
+
+.group-section-collapse .el-collapse-item {
+  margin-bottom: 16px; /* 增加分组间距 */
+  border: 1px solid #e4e7ed; /* 给整个分组加个淡边框 */
+  border-radius: 8px; /* 圆角 */
+  overflow: hidden; /* 防止内容溢出圆角 */
+  box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05); /* 增加阴影层次 */
+  background-color: #fff;
+}
+
+.group-section-collapse .el-collapse-item__header {
+  height: auto;
+  line-height: normal;
+  padding: 0;
+  border-bottom: 1px solid #d9ecff; /* 头部下划线改为淡蓝色 */
+  background-color: #ecf5ff; /* 头部背景色改为淡蓝色 */
+}
+
+/* 隐藏 Element Plus 默认箭头 */
+.group-section-collapse .el-collapse-item__arrow {
+  display: none;
+}
+
+.group-section-collapse .el-collapse-item__wrap {
+  border-bottom: none;
+}
+
+.group-section-collapse .el-collapse-item__content {
+  padding: 0; /* 移除内边距，使表格紧贴 */
+}
+
+.custom-collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 16px 24px; /* 增加内边距 */
+  background-color: #ecf5ff; /* 背景色改为淡蓝色 */
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.custom-collapse-header:hover {
+  background-color: #d9ecff; /* 悬停效果加深 */
+}
+
+.group-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px; /* 增加间距 */
+}
+
+.group-title {
+  font-weight: 700; /* 加粗 */
+  font-size: 16px; /* 加大字体 */
+  color: #409eff; /* 标题改为蓝色 */
+}
+
+.project-info-tags {
+  display: flex;
+  gap: 6px;
+  margin-left: 12px;
+}
+
+.info-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 确保过期行背景色优先级高于斑马纹 */
+.el-table .expired-row {
+  --el-table-tr-bg-color: #fef0f0;
+}
+
+/* 覆盖背景色 */
+.el-table .expired-row {
+  background-color: #fef0f0 !important;
+}
+.el-table--striped .el-table__body tr.el-table__row--striped.expired-row td.el-table__cell {
+  background-color: #fef0f0 !important;
+}
+
+.product-name-truncate {
+  display: inline-block;
+  max-width: 12em; /* 限制约为12个汉字的宽度 */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}

@@ -11,9 +11,18 @@ export const useProjectMgtViewStore = defineStore('ProjectMgtView', {
     async fetchData(params) {
       this.loading = true
       this.error = null
+      
+      // Clean up params: remove empty strings, null, undefined
+      const cleanParams = {}
+      for (const key in params) {
+        if (params[key] !== '' && params[key] !== null && params[key] !== undefined) {
+          cleanParams[key] = params[key]
+        }
+      }
+
       try {
-        const res = await getProjectData(params)
-        this.data = res.data
+        const res = await getProjectData(cleanParams)
+        this.data = res
         return res
       } catch (error) {
         this.error = error

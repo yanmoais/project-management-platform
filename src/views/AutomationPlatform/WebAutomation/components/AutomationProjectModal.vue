@@ -1,14 +1,14 @@
 <template>
-    <el-dialog
+    <el-drawer
     v-model="dialogVisible"
     :title="isEdit ? '编辑自动化项目' : '新增自动化项目'"
-    width="80%"
+    size="75%"
     :close-on-click-modal="false"
     destroy-on-close
-    align-center
+    class="automation-project-modal"
     @close="handleClose"
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" class="modal-form-content">
       <el-row :gutter="20">
         <el-col :span="12">
           <el-form-item label="流程名称" prop="process_name">
@@ -16,7 +16,21 @@
           </el-form-item>
         </el-col>
         <el-col :span="12">
+          <el-form-item label="优先级" prop="level" required>
+            <el-select v-model="form.level" placeholder="请选择优先级" style="width: 100%">
+              <el-option label="P0" value="P0" />
+              <el-option label="P1" value="P1" />
+              <el-option label="P2" value="P2" />
+              <el-option label="P3" value="P3" />
+            </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="20">
+        <el-col :span="16">
           <el-form-item label="关联产品" prop="product_ids">
+            <div style="display: flex; gap: 8px; width: 100%;">
             <el-select
               v-model="form.product_ids"
               multiple
@@ -31,6 +45,16 @@
                 :label="item.product_package_name + ' (' + item.product_id + ')'"
                 :value="item.id"
               />
+            </el-select>
+            <el-button :icon="Refresh" circle @click="refreshProductList" title="刷新产品列表" />
+            </div>
+          </el-form-item>
+        </el-col>
+        <el-col :span="8">
+          <el-form-item label="状态" prop="des_status" required>
+            <el-select v-model="form.des_status" placeholder="请选择状态" style="width: 100%">
+              <el-option label="进行中" value="进行中" />
+              <el-option label="完成" value="完成" />
             </el-select>
           </el-form-item>
         </el-col>
@@ -57,6 +81,31 @@
                 :value="item"
               />
             </el-select>
+          </el-form-item>
+        </el-col>
+      </el-row>
+
+      <el-row :gutter="20">
+        <el-col :span="12">
+          <el-form-item label="预计开始" prop="start_time" required>
+            <el-date-picker
+              v-model="form.start_time"
+              type="date"
+              placeholder="选择日期"
+              value-format="YYYY-MM-DD"
+              style="width: 100%"
+            />
+          </el-form-item>
+        </el-col>
+        <el-col :span="12">
+          <el-form-item label="预计结束" prop="end_time" required>
+            <el-date-picker
+              v-model="form.end_time"
+              type="date"
+              placeholder="选择日期"
+              value-format="YYYY-MM-DD"
+              style="width: 100%"
+            />
           </el-form-item>
         </el-col>
       </el-row>
@@ -123,16 +172,17 @@
         <el-button type="primary" :loading="submitting" @click="submitForm">确定</el-button>
       </span>
     </template>
-    </el-dialog>
+    </el-drawer>
 </template>
 
 <script setup>
 import { ref, reactive, watch, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowUp, ArrowDown, Link as LinkIcon } from '@element-plus/icons-vue'
+import { ArrowUp, ArrowDown, Link as LinkIcon, Refresh } from '@element-plus/icons-vue'
 import axios from 'axios'
 import TestStepEditor from './TestStepEditor.vue'
 import { getEnumValues } from '@/api/AutomationPlatform/WebAutomation/ProductManagement'
+import { useUserStore } from '@/store/Auth/user'
 
 const props = defineProps({
   visible: {
@@ -165,13 +215,18 @@ const form = reactive({
   product_type: '',
   environment: '',
   product_address: '',
-  test_steps: []
+  test_steps: [],
+  des_status: '进行中',
+  start_time: '',
+  end_time: ''
 })
 
 const rules = {
   process_name: [{ required: true, message: '请输入流程名称', trigger: 'blur' }],
   product_ids: [{ required: true, message: '请选择关联产品', trigger: 'change' }],
-  environment: [{ required: true, message: '请选择环境', trigger: 'change' }]
+  environment: [{ required: true, message: '请选择环境', trigger: 'change' }],
+  start_time: [{ required: true, message: '请选择预计开始时间', trigger: 'change' }],
+  end_time: [{ required: true, message: '请选择预计结束时间', trigger: 'change' }]
 }
 
 const toggleAddressDetails = () => {
@@ -249,107 +304,127 @@ const fetchEnvironmentOptions = async () => {
   }
 }
 
-watch(() => props.visible, (val) => {
+watch(() => props.visible, async (val) => {
   dialogVisible.value = val
   if (val) {
-    fetchEnvironmentOptions()
-    fetchProductList().then(() => {
-      if (props.projectData) {
-        // 编辑模式下，确保 addresses 被初始化
-        selectedProductsInfo.value.forEach(p => getProductAddresses(p))
-        
-        resetForm()
-        Object.assign(form, props.projectData)
-        
-        // Parse JSON fields
-        if (typeof form.product_ids === 'string') {
-           try { 
-             const parsed = JSON.parse(form.product_ids)
-             form.product_ids = Array.isArray(parsed) ? parsed : []
-           } catch(e) { 
-             form.product_ids = [] 
-           }
-        } else if (typeof form.product_ids === 'number') {
-           form.product_ids = [form.product_ids]
-        }
+    // 并行获取数据，且利用缓存
+    const promises = []
+    if (environmentOptions.value.length === 0) {
+      promises.push(fetchEnvironmentOptions())
+    }
+    if (productList.value.length === 0) {
+      promises.push(fetchProductList())
+    }
+    
+    if (promises.length > 0) {
+      await Promise.all(promises)
+    }
 
-        // Map product_ids (which might be product_id strings) to internal database IDs for correct display
-        if (form.product_ids && form.product_ids.length > 0) {
-             form.product_ids = form.product_ids.map(pid => {
-                 // 1. Try to match by internal ID (p.id)
-                 const matchById = productList.value.find(p => p.id == pid)
-                 if (matchById) return matchById.id
-                 
-                 // 2. Try to match by Product Code (p.product_id)
-                 const matchByCode = productList.value.find(p => p.product_id == pid)
-                 if (matchByCode) return matchByCode.id
-                 
-                 return pid
-             })
-         }
-        
-        if (typeof form.test_steps === 'string') {
-          try { form.test_steps = JSON.parse(form.test_steps) } catch(e) { form.test_steps = [] }
-        }
-        
-        if (form.product_ids.length > 0) {
-           const firstId = form.product_ids[0]
-           const product = productList.value.find(p => p.id === firstId)
-           if (product) {
-              form.system = product.system_type
-              form.product_type = product.product_type
-              // Do not overwrite environment as it might be custom saved
-              if (!form.environment) {
-                 form.environment = product.environment
-              }
-           }
-        }
-
-        updateSelectedProductsInfo()
-        
-        if (form.product_address && selectedProductsInfo.value.length > 0) {
-            try {
-               let savedAddresses = []
-               if (form.product_address.trim().startsWith('[') && form.product_address.trim().endsWith(']')) {
-                  savedAddresses = JSON.parse(form.product_address)
-               } else {
-                  savedAddresses = [form.product_address]
-               }
-                selectedProductsInfo.value.forEach(p => getProductAddresses(p))
-
-                const totalDefaultAddresses = selectedProductsInfo.value.reduce((acc, p) => acc + (p.addresses ? p.addresses.length : 0), 0)
-                if (savedAddresses.length === totalDefaultAddresses) {
-                   let addrIndex = 0
-                   selectedProductsInfo.value.forEach(p => {
-                      if (p.addresses) {
-                         for (let i = 0; i < p.addresses.length; i++) {
-                            if (addrIndex < savedAddresses.length) {
-                               p.addresses[i] = savedAddresses[addrIndex++]
-                            }
-                         }
-                      }
-                   })
-                }
-            } catch (e) {
-               console.error('Error restoring addresses', e)
-            }
-        }
-      } else {
-        resetForm()
+    if (props.projectData) {
+      // 编辑模式下，确保 addresses 被初始化
+      // 这里的逻辑依赖 productList，所以必须在 fetch 完成后执行
+      // 注意：如果 productList 是缓存的，这里直接执行；如果是新 fetch 的，await 保证了数据已就绪
+      
+      resetForm()
+      Object.assign(form, props.projectData)
+      
+      // Format dates for date picker
+      if (form.start_time) form.start_time = form.start_time.substring(0, 10)
+      if (form.end_time) form.end_time = form.end_time.substring(0, 10)
+      
+      // Parse JSON fields
+      if (typeof form.product_ids === 'string') {
+          try { 
+            const parsed = JSON.parse(form.product_ids)
+            form.product_ids = Array.isArray(parsed) ? parsed : []
+          } catch(e) { 
+            form.product_ids = [] 
+          }
+      } else if (typeof form.product_ids === 'number') {
+          form.product_ids = [form.product_ids]
       }
-    })
+
+      // Map product_ids (which might be product_id strings) to internal database IDs for correct display
+      if (form.product_ids && form.product_ids.length > 0) {
+            form.product_ids = form.product_ids.map(pid => {
+                // 1. Try to match by internal ID (p.id)
+                const matchById = productList.value.find(p => p.id == pid)
+                if (matchById) return matchById.id
+                
+                // 2. Try to match by Product Code (p.product_id)
+                const matchByCode = productList.value.find(p => p.product_id == pid)
+                if (matchByCode) return matchByCode.id
+                
+                return pid
+            })
+        }
+      
+      if (typeof form.test_steps === 'string') {
+        try { form.test_steps = JSON.parse(form.test_steps) } catch(e) { form.test_steps = [] }
+      }
+      
+      if (form.product_ids.length > 0) {
+          const firstId = form.product_ids[0]
+          const product = productList.value.find(p => p.id === firstId)
+          if (product) {
+            form.system = product.system_type
+            form.product_type = product.product_type
+            // Do not overwrite environment as it might be custom saved
+            if (!form.environment) {
+                form.environment = product.environment
+            }
+          }
+      }
+
+      updateSelectedProductsInfo()
+      
+      // 恢复地址信息
+      if (form.product_address && selectedProductsInfo.value.length > 0) {
+          try {
+              let savedAddresses = []
+              if (form.product_address.trim().startsWith('[') && form.product_address.trim().endsWith(']')) {
+                savedAddresses = JSON.parse(form.product_address)
+              } else {
+                savedAddresses = [form.product_address]
+              }
+              selectedProductsInfo.value.forEach(p => getProductAddresses(p))
+
+              const totalDefaultAddresses = selectedProductsInfo.value.reduce((acc, p) => acc + (p.addresses ? p.addresses.length : 0), 0)
+              // 简单匹配：如果保存的地址数量与默认地址数量一致，尝试恢复
+              // 或者直接按顺序填充
+              let addrIndex = 0
+              selectedProductsInfo.value.forEach(p => {
+                if (p.addresses) {
+                    for (let i = 0; i < p.addresses.length; i++) {
+                      if (addrIndex < savedAddresses.length) {
+                          p.addresses[i] = savedAddresses[addrIndex++]
+                      }
+                    }
+                }
+              })
+          } catch (e) {
+              console.error('Error restoring addresses', e)
+          }
+      }
+    } else {
+      resetForm()
+    }
   }
 })
 
 const resetForm = () => {
   form.id = null
   form.process_name = ''
+  form.level = 'P0'
   form.product_ids = []
   form.system = ''
   form.product_type = ''
   form.environment = ''
   form.product_address = ''
   form.test_steps = []
+  form.des_status = '进行中'
+  form.start_time = ''
+  form.end_time = ''
   selectedProductsInfo.value = []
 }
 
@@ -358,6 +433,9 @@ const handleClose = () => {
 }
 
 const fetchProductList = async () => {
+  // 如果已经有缓存，则不再请求（除非显式刷新）
+  if (productList.value.length > 0) return
+
   try {
     const res = await axios.get('/api/automation/product/projects', { params: { page_size: 1000 } })
     if (res.data.code === 200) {
@@ -367,6 +445,13 @@ const fetchProductList = async () => {
     console.error('Fetch products error', error)
   }
 }
+
+const refreshProductList = async () => {
+    productList.value = [] // Clear cache
+    await fetchProductList()
+    ElMessage.success('产品列表已刷新')
+}
+
 const handleProductChange = (val) => {
   // Auto-fill system and product_type based on first selected product
   if (val && val.length > 0) {
@@ -415,6 +500,17 @@ const submitForm = async () => {
 
         const payload = { ...form }
         
+        // 如果是新增，设置创建人
+        if (!isEdit.value) {
+           const userStore = useUserStore()
+           let username = userStore.name
+           if (!username) {
+               const localUser = JSON.parse(localStorage.getItem('user') || '{}')
+               username = localUser.username || 'admin'
+           }
+           payload.created_by = username
+        }
+
         // 1. Ensure project_id is set (using the primary key ID from the first selected product)
         if (!payload.project_id && form.product_ids && form.product_ids.length > 0) {
            payload.project_id = form.product_ids[0]
@@ -474,6 +570,17 @@ const submitForm = async () => {
 </script>
 
 <style scoped>
+/* 限制弹窗高度并支持滚动 */
+:deep(.automation-project-modal .el-drawer__body) {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.modal-form-content {
+  padding-right: 10px; /* 避免滚动条遮挡 */
+}
+
 .selected-products-section {
   margin-bottom: 22px;
 }

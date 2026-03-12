@@ -1,134 +1,200 @@
 <template>
   <div class="product-management-container">
-    <div class="content-wrapper">
-      <div class="filter-container">
-        <el-form :inline="true" :model="queryParams" class="demo-form-inline">
-          <el-form-item label="产品ID">
-            <el-select 
-              v-model="queryParams.product_ids" 
-              multiple 
-              collapse-tags 
-              placeholder="请选择产品ID" 
-              style="width: 200px" 
-              clearable 
-              filterable
-            >
-              <el-option v-for="item in productIds" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="产品名称">
-             <el-select 
-              v-model="queryParams.product_names" 
-              multiple 
-              collapse-tags 
-              placeholder="请选择产品名称" 
-              style="width: 200px" 
-              clearable 
-              filterable
-            >
-              <el-option v-for="item in productNames" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="环境">
-            <el-select v-model="queryParams.environment" placeholder="请选择环境" style="width: 150px" clearable>
-              <el-option v-for="item in envOptions" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="产品地址">
-            <el-input 
-              v-model="queryParams.product_address" 
-              placeholder="请输入产品地址" 
-              style="width: 200px" 
-              clearable 
-              @keyup.enter="handleSearch" 
-            />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
+    <el-container class="layout-container">
+      <!-- 左侧侧边栏 -->
+      <el-aside width="240px" class="sidebar">
+        <div class="sidebar-header">
+          <span>产品分类</span>
+        </div>
+        <el-menu
+          :default-active="activeMenu"
+          class="el-menu-vertical"
+          :border="false"
+        >
+          <el-menu-item index="all" @click="handleMenuSelect('all')">
+            <el-icon><Menu /></el-icon>
+            <span>所有产品</span>
+          </el-menu-item>
+          <el-menu-item index="test" @click="handleMenuSelect('test')">
+            <el-icon><Monitor /></el-icon>
+            <span>测试环境</span>
+          </el-menu-item>
+          <el-menu-item index="prod" @click="handleMenuSelect('prod')">
+            <el-icon><Reading /></el-icon>
+            <span>生产环境</span>
+          </el-menu-item>
+        </el-menu>
 
-      <div class="header-actions">
-        <el-button type="primary" :icon="Plus"@click="handleAdd">新增产品</el-button>
-      </div>
+        <div class="sidebar-header mt-4">
+          <span>快捷操作</span>
+        </div>
+        <div class="quick-actions">
+          <el-button text class="quick-action-btn" @click="handleAdd">
+            <el-icon class="mr-2 text-primary"><Plus /></el-icon>
+            新增产品
+          </el-button>
+        </div>
+      </el-aside>
 
-      <!-- Table -->
-      <el-table :data="tableData" v-loading="loading" style="width: 100%" border>
-      <el-table-column prop="product_id" label="产品ID" width="100" />
-      <el-table-column label="产品包名" min-width="200">
-        <template #default="{ row }">
-          <div class="product-info">
-            <el-image 
-              v-if="row.product_image" 
-              :src="getImageUrl(row.product_image)" 
-              style="width: 30px; height: 30px; margin-right: 10px; border-radius: 4px;"
-            />
-            <span>{{ row.product_package_name }}</span>
+      <!-- 右侧主内容 -->
+      <el-main class="right-content">
+        <div class="unified-content" v-loading="loading">
+          <!-- 顶部操作栏 -->
+          <div class="header-top">
+            <div class="header-left">
+              <span class="header-title">{{ currentTitle }}</span>
+              <el-tag type="info" round effect="plain">共 {{ total }} 个项目</el-tag>
+            </div>
+            <div class="header-actions">
+            <el-button type="primary" :icon="Plus"@click="handleAdd">新增产品</el-button>
+            </div>
           </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="产品地址" min-width="200">
-        <template #default="{ row }">
-          <div v-if="getAddresses(row.product_address).length <= 3">
-             <div v-for="(addr, idx) in getAddresses(row.product_address)" :key="idx">
-               <el-link :href="addr" target="_blank" type="primary">{{ addr }}</el-link>
-             </div>
+          
+          <!-- 筛选区域 -->
+          <div class="filter-bar-unified">
+            <el-form :inline="true" :model="queryParams" class="demo-form-inline">
+              <el-row :gutter="12">
+                <el-col :span="5">
+                  <el-form-item label="产品ID" style="width: 100%; margin-bottom: 0;">
+                    <el-select 
+                      v-model="queryParams.product_ids" 
+                      multiple 
+                      collapse-tags 
+                      placeholder="请选择产品ID" 
+                      style="width: 100%" 
+                      clearable 
+                      filterable
+                    >
+                      <el-option v-for="item in productIds" :key="item" :label="item" :value="item" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="5">
+                  <el-form-item label="产品名称" style="width: 100%; margin-bottom: 0;">
+                    <el-select 
+                      v-model="queryParams.product_names" 
+                      multiple 
+                      collapse-tags 
+                      placeholder="请选择产品名称" 
+                      style="width: 100%" 
+                      clearable 
+                      filterable
+                    >
+                      <el-option v-for="item in productNames" :key="item" :label="item" :value="item" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                  <el-form-item label="环境" style="width: 100%; margin-bottom: 0;">
+                    <el-select v-model="queryParams.environment" placeholder="请选择环境" style="width: 100%" clearable>
+                      <el-option v-for="item in envOptions" :key="item" :label="item" :value="item" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                  <el-form-item label="产品地址" style="width: 100%; margin-bottom: 0;">
+                    <el-input 
+                      v-model="queryParams.product_address" 
+                      placeholder="请输入产品地址" 
+                      style="width: 100%" 
+                      clearable 
+                      @keyup.enter="handleSearch" 
+                    />
+                  </el-form-item>
+                </el-col>
+                <el-col :span="6" class="filter-actions">
+                  <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
+                  <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
+                </el-col>
+              </el-row>
+            </el-form>
           </div>
-          <el-tooltip v-else placement="top">
-            <template #content>
-              <div v-for="(addr, idx) in getAddresses(row.product_address)" :key="idx">
-                {{ addr }}
+
+          
+
+          <!-- Table -->
+          <el-table 
+            :data="tableData" 
+            v-loading="loading" 
+            style="width: 100%" 
+            stripe 
+            :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: 'bold' }"
+          >
+          <el-table-column prop="product_id" label="产品ID" width="100" />
+          <el-table-column label="产品包名" min-width="200">
+            <template #default="{ row }">
+              <div class="product-info">
+                <el-image 
+                  v-if="row.product_image" 
+                  :src="getImageUrl(row.product_image)" 
+                  style="width: 30px; height: 30px; margin-right: 10px; border-radius: 4px;"
+                />
+                <span>{{ row.product_package_name }}</span>
               </div>
             </template>
-            <div>
-              <div v-for="(addr, idx) in getAddresses(row.product_address).slice(0, 3)" :key="idx">
-                 <el-link :href="addr" target="_blank" type="primary">{{ addr }}</el-link>
+          </el-table-column>
+          <el-table-column label="产品地址" min-width="200">
+            <template #default="{ row }">
+              <div v-if="getAddresses(row.product_address).length <= 3">
+                <div v-for="(addr, idx) in getAddresses(row.product_address)" :key="idx">
+                  <el-link :href="addr" target="_blank" type="primary">{{ addr }}</el-link>
+                </div>
               </div>
-              <span>...</span>
-            </div>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-      <el-table-column prop="system_type" label="系统" width="100" align="center" />
-      <el-table-column prop="product_type" label="产品类型" width="120" align="center" />
-      <el-table-column prop="environment" label="环境" width="100" align="center" />
-      <el-table-column label="是否自动化" width="120" align="center">
-        <template #default="{ row }">
-          <el-tag :type="row.is_automated === '是' ? 'success' : 'info'">{{ row.is_automated || '否' }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="version_number" label="版本号" width="100" align="center" />
-      <el-table-column label="备注" min-width="150" show-overflow-tooltip>
-        <template #default="{ row }">
-          <span>{{ row.remarks }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="handleHistory(row)">查看历史</el-button>
-          <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+              <el-tooltip v-else placement="top">
+                <template #content>
+                  <div v-for="(addr, idx) in getAddresses(row.product_address)" :key="idx">
+                    {{ addr }}
+                  </div>
+                </template>
+                <div>
+                  <div v-for="(addr, idx) in getAddresses(row.product_address).slice(0, 3)" :key="idx">
+                    <el-link :href="addr" target="_blank" type="primary">{{ addr }}</el-link>
+                  </div>
+                  <span>...</span>
+                </div>
+              </el-tooltip>
+            </template>
+          </el-table-column>
+          <el-table-column prop="system_type" label="系统" width="100" align="center" />
+          <el-table-column prop="product_type" label="产品类型" width="120" align="center" />
+          <el-table-column prop="environment" label="环境" width="100" align="center" />
+          <el-table-column label="是否自动化" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.is_automated === '是' ? 'success' : 'info'">{{ row.is_automated || '否' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="version_number" label="版本号" width="100" align="center" />
+          <el-table-column label="备注" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span>{{ row.remarks }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="200" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="handleHistory(row)">查看历史</el-button>
+              <el-button link type="primary" @click="handleEdit(row)">编辑</el-button>
+              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
 
-    <!-- Pagination -->
-    <CommonPagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[5, 10, 20, 50]"
-        @change="fetchData"
-      />
-    </div>
+        <!-- Pagination -->
+        <CommonPagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="total"
+            :page-sizes="[5, 10, 20, 50]"
+            @change="fetchData"
+          />
+        </div>
+      </el-main>
+    </el-container>
 
-    <!-- Add/Edit Dialog -->
-    <el-dialog
+    <!-- Add/Edit Drawer -->
+    <el-drawer
       :title="dialogTitle"
       v-model="dialogVisible"
-      width="900px"
+      size="40%"
       @close="resetForm"
     >
       <el-form :model="form" :rules="rules" ref="formRef" label-width="100px">
@@ -255,13 +321,17 @@
           <el-button type="primary" @click="submitForm">确定</el-button>
         </span>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <!-- 历史记录弹窗 -->
     <OperationHistoryDialog
       v-model:visible="historyDialogVisible"
       :logs="historyLogs"
       :loading="historyLoading"
+      :total="historyTotal"
+      v-model:current-page="historyCurrentPage"
+      v-model:page-size="historyPageSize"
+      @change="handleHistoryPaginationChange"
     />
   </div>
 </template>
@@ -269,7 +339,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, genFileId } from 'element-plus'
-import { Plus, Delete, Search, Refresh } from '@element-plus/icons-vue'
+import { Plus, Delete, Search, Refresh, Menu, Monitor, Reading } from '@element-plus/icons-vue'
 import { 
   getProjects, 
   createProject, 
@@ -300,9 +370,41 @@ const queryParams = ref({
 const productIds = ref([])
 const productNames = ref([])
 
+const activeMenu = ref('all')
+const currentTitle = ref('所有产品')
+
+const handleMenuSelect = (index) => {
+  activeMenu.value = index
+  if (index === 'all') {
+    currentTitle.value = '所有产品'
+    queryParams.value.environment = ''
+  } else if (index === 'test') {
+    currentTitle.value = '测试环境'
+    queryParams.value.environment = '测试环境'
+  } else if (index === 'prod') {
+    currentTitle.value = '生产环境'
+    queryParams.value.environment = '生产环境'
+  }
+  handleSearch()
+}
+
 const historyDialogVisible = ref(false)
 const historyLogs = ref([])
+const allHistoryLogs = ref([])
 const historyLoading = ref(false)
+const historyTotal = ref(0)
+const historyCurrentPage = ref(1)
+const historyPageSize = ref(10)
+
+const updateHistoryLogs = () => {
+  const start = (historyCurrentPage.value - 1) * historyPageSize.value
+  const end = start + historyPageSize.value
+  historyLogs.value = allHistoryLogs.value.slice(start, end)
+}
+
+const handleHistoryPaginationChange = () => {
+  updateHistoryLogs()
+}
 
 const dialogVisible = ref(false)
 const dialogTitle = ref('新增产品')
@@ -474,10 +576,15 @@ const handleHistory = async (row) => {
   historyDialogVisible.value = true
   historyLoading.value = true
   historyLogs.value = []
+  allHistoryLogs.value = []
+  historyTotal.value = 0
+  historyCurrentPage.value = 1
   try {
     const res = await getProjectLogs(row.id)
     if (res.code === 200) {
-      historyLogs.value = res.data
+      allHistoryLogs.value = res.data
+      historyTotal.value = res.data.length
+      updateHistoryLogs()
     }
   } catch (e) {
     ElMessage.error('获取历史记录失败')

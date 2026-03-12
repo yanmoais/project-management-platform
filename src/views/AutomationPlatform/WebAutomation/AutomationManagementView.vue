@@ -1,146 +1,278 @@
 <template>
-    <div class="automation-management-container">
-    <div class="content-wrapper">
-      <div class="filter-container">
-        <el-form :inline="true" :model="queryParams" class="demo-form-inline">
-          <el-form-item label="产品名称">
-            <el-select 
-              v-model="queryParams.product_names" 
-              multiple 
-              collapse-tags 
-              placeholder="请选择产品名称" 
-              style="width: 200px" 
-              clearable 
-              filterable
-            >
-              <el-option v-for="item in productOptions" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="流程名称">
-            <el-input 
-              v-model="queryParams.process_name" 
-              placeholder="请输入流程名称" 
-              style="width: 200px" 
-              clearable 
-              @keyup.enter="handleSearch" 
-            />
-          </el-form-item>
-          <el-form-item label="测试状态">
-            <el-select 
-              v-model="queryParams.status" 
-              multiple 
-              collapse-tags 
-              placeholder="请选择测试状态" 
-              style="width: 200px" 
-              clearable
-            >
-              <el-option label="待执行" value="待执行" />
-              <el-option label="失败" value="failed" />
-              <el-option label="成功" value="passed" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="环境">
-            <el-select v-model="queryParams.environment" placeholder="请选择环境" style="width: 150px" clearable>
-              <el-option v-for="item in envOptions" :key="item" :label="item" :value="item" />
-            </el-select>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :icon="Search" @click="handleSearch">搜索</el-button>
-            <el-button :icon="Refresh" @click="resetQuery">重置</el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="openCreateModal">新增自动化项目</el-button>
-      </div>
-      <div v-loading="loading" class="project-groups">
-        <el-empty v-if="!groupedProjects || Object.keys(groupedProjects).length === 0" description="暂无自动化项目" />
-        
-        <div v-else class="group-section-collapse">
-          <el-collapse v-model="activeNames">
-            <el-collapse-item v-for="(group, groupName) in groupedProjects" :key="groupName" :name="groupName">
-              <template #title>
-                <div class="group-header custom-collapse-header">
-                  <div class="group-header-left">
-                    <el-icon class="collapse-icon" style="margin-right: 8px">
-                      <ArrowRight v-if="!activeNames.includes(groupName)" />
-                      <ArrowDown v-else />
-                    </el-icon>
-                    <span class="group-title">{{ group.title || groupName }}</span>
-                    <el-tag type="info" size="small" style="margin-left: 10px">{{ group.items.length }} 个测试用例</el-tag>
-                    
-                    <!-- Project Info Fields -->
-                    <div class="project-info-tags" v-if="group.info && Object.keys(group.info).length > 0">
-                      <el-tag v-if="group.info.product_type" size="small" effect="light" type="primary" class="info-tag" round>
-                        <el-icon><Monitor /></el-icon> {{ group.info.product_type }}
-                      </el-tag>
-                      <el-tag v-if="group.info.system_type" size="small" effect="light" type="warning" class="info-tag" round>
-                        <el-icon><Platform /></el-icon> {{ group.info.system_type }}
-                      </el-tag>
-                      <el-tag v-if="group.info.environment" size="small" effect="light" type="success" class="info-tag" round>
-                        <el-icon><Connection /></el-icon> {{ group.info.environment }}
-                      </el-tag>
-                      <el-tag v-if="group.info.product_id" size="small" effect="plain" type="info" class="info-tag" round>
-                        <el-icon><CollectionTag /></el-icon> {{ group.info.product_id }}
-                      </el-tag>
-                      <el-tag v-if="group.info.version_number" size="small" effect="plain" type="info" class="info-tag" round>
-                        <el-icon><InfoFilled /></el-icon> {{ group.info.version_number }}
-                      </el-tag>
-                    </div>
-                  </div>
-                  
-                  <div class="group-header-right" @click.stop>
-                    <el-button type="success" size="small" :icon="VideoPlay" @click="handleBatchExecute(group.items)">批量执行</el-button>
-                    <el-button type="primary" size="small" :icon="Plus" @click="openCreateModal(group.info)">添加项目</el-button>
-                  </div>
-                </div>
-              </template>
-              
-              <el-table :data="group.items" style="width: 100%">
-                <el-table-column label="ID" width="80">
-                  <template #default="scope">
-                    {{ scope.$index + 1 }}
-                  </template>
-                </el-table-column>
-                <el-table-column prop="process_name" label="流程名称"/>
-                <el-table-column prop="environment" label="环境">
-                  <template #default="scope">
-                    <el-tag size="small">{{ scope.row.environment }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="status" label="最近状态">
-                  <template #default="scope">
-                    <div style="display: flex; align-items: center">
-                        <el-icon v-if="scope.row.status === 'Running'" class="is-loading" style="margin-right: 5px"><Loading /></el-icon>
-                        <el-tag :type="getStatusType(scope.row.status)">{{ scope.row.status || '待执行' }}</el-tag>
-                    </div>
-                  </template>
-                </el-table-column>
-                <el-table-column prop="updated_at" label="更新时间"/>
-                <el-table-column label="操作" fixed="right" width="400">
-                  <template #default="scope">
-                    <el-button link type="primary" size="small" @click="handleExecute(scope.row)">执行测试</el-button>
-                    <el-button link type="primary" size="small" @click="handleTestConnection(scope.row)">测试连接</el-button>
-                    <el-button link type="primary" size="small" @click="handleCodeManage(scope.row)">代码管理</el-button>
-                    <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
-                    <el-button link type="primary" size="small" @click="handleHistory(scope.row)">历史记录</el-button>
-                    <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
-                  </template>
-                </el-table-column>
-              </el-table>
-            </el-collapse-item>
-          </el-collapse>
+  <div class="automation-management-view">
+    <el-container class="layout-container">
+      <!-- 左侧侧边栏 -->
+      <el-aside width="240px" class="sidebar">
+        <div class="sidebar-header">
+          <span>自动化分类</span>
         </div>
-      </div>
+        <el-menu
+          :default-active="activeMenu"
+          class="el-menu-vertical"
+          @select="handleMenuSelect"
+        >
+          <el-menu-item index="all">
+            <el-icon><Menu /></el-icon>
+            <span>所有项目</span>
+            <span class="badge">{{ statistics.all }}</span>
+          </el-menu-item>
+          <el-menu-item index="status-pending">
+            <el-icon><Clock /></el-icon>
+            <span>待执行</span>
+            <span class="badge">{{ statistics.pending }}</span>
+          </el-menu-item>
+          <el-menu-item index="status-running">
+            <el-icon><Loading /></el-icon>
+            <span>进行中</span>
+            <span class="badge">{{ statistics.running }}</span>
+          </el-menu-item>
+          <el-menu-item index="status-passed">
+            <el-icon><CircleCheck /></el-icon>
+            <span>成功</span>
+            <span class="badge">{{ statistics.passed }}</span>
+          </el-menu-item>
+          <el-menu-item index="status-failed">
+            <el-icon><CircleClose /></el-icon>
+            <span>失败</span>
+            <span class="badge">{{ statistics.failed }}</span>
+          </el-menu-item>
+        </el-menu>
 
-      <CommonPagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        @change="fetchProjects"
-      />
-    </div>
+        <div class="sidebar-header mt-4">
+          <span>产品分类</span>
+        </div>
+        <el-menu
+          :default-active="activeMenu"
+          class="el-menu-vertical"
+          @select="handleMenuSelect"
+        >
+          <el-menu-item 
+            v-for="prod in statistics.products" 
+            :key="prod.product_name" 
+            :index="'product-' + prod.product_name"
+          >
+            <el-icon><Briefcase /></el-icon>
+            <span class="product-name-truncate" :title="prod.product_name">{{ prod.product_name }}</span>
+            <span class="badge">{{ prod.count }}</span>
+          </el-menu-item>
+        </el-menu>
+
+        <div class="sidebar-header mt-4">
+          <span>快捷操作</span>
+        </div>
+        <div class="quick-actions">
+          <el-button text class="quick-action-btn" @click="openCreateModal">
+            <el-icon class="mr-2 text-primary"><CirclePlus /></el-icon>
+            新建项目
+          </el-button>
+          <el-button text class="quick-action-btn">
+            <el-icon class="mr-2 text-info"><Filter /></el-icon>
+            筛选项目
+          </el-button>
+        </div>
+      </el-aside>
+
+      <!-- 右侧主内容 -->
+      <el-main class="right-content">
+        <div class="unified-content" v-loading="loading">
+          <!-- 顶部操作栏 -->
+          <div class="header-top">
+            <div class="header-left">
+              <span class="header-title">{{ currentTitle }}</span>
+              <el-tag type="info" round effect="plain">共 {{ total }} 个项目</el-tag>
+            </div>
+            <div class="header-right">
+              <el-button type="primary" :icon="Plus" @click="openCreateModal">新增项目</el-button>
+              <el-button :icon="Refresh" circle @click="handleRefresh" />
+            </div>
+          </div>
+
+          <!-- 筛选区域 -->
+          <div class="filter-bar-unified">
+            <el-form :inline="true" :model="queryParams" class="demo-form-inline">
+              <el-row :gutter="12">
+                <el-col :span="5">
+                  <el-form-item label="产品分类" style="width: 100%; margin-bottom: 0;">
+                    <el-select 
+                      v-model="queryParams.product_names" 
+                      multiple 
+                      collapse-tags 
+                      placeholder="请选择产品分类" 
+                      style="width: 100%" 
+                      clearable 
+                      filterable
+                      @change="handleSearch"
+                    >
+                      <el-option 
+                        v-for="prod in statistics.products" 
+                        :key="prod.product_name" 
+                        :label="prod.product_name" 
+                        :value="prod.product_name" 
+                      />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="5">
+                  <el-form-item label="流程名称" style="width: 100%; margin-bottom: 0;">
+                    <el-select 
+                      v-model="queryParams.process_name" 
+                      multiple 
+                      collapse-tags 
+                      placeholder="请选择流程名称" 
+                      style="width: 100%" 
+                      clearable 
+                      filterable
+                      @change="handleSearch"
+                    >
+                      <el-option v-for="item in processOptions" :key="item.id" :label="item.process_name" :value="item.process_name" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                  <el-form-item label="环境" style="width: 100%; margin-bottom: 0;">
+                    <el-select v-model="queryParams.environment" placeholder="请选择环境" style="width: 100%" clearable @change="handleSearch">
+                      <el-option v-for="item in envOptions" :key="item" :label="item" :value="item" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                <el-col :span="4">
+                   <el-form-item label="优先级" style="width: 100%; margin-bottom: 0;">
+                    <el-select 
+                      v-model="queryParams.level" 
+                      multiple 
+                      collapse-tags 
+                      placeholder="请选择优先级" 
+                      style="width: 100%" 
+                      clearable
+                      @change="handleSearch"
+                    >
+                      <el-option label="P0" value="P0" />
+                      <el-option label="P1" value="P1" />
+                      <el-option label="P2" value="P2" />
+                      <el-option label="P3" value="P3" />
+                    </el-select>
+                  </el-form-item>
+                </el-col>
+                 <el-col :span="6" class="filter-actions">
+                    <el-button @click="resetQuery">重置</el-button>
+                    <el-button type="primary" @click="handleSearch">搜索</el-button>
+                 </el-col>
+              </el-row>
+            </el-form>
+          </div>
+
+          <div class="project-groups" style="flex: 1;">
+            <el-empty v-if="!groupedProjects || Object.keys(groupedProjects).length === 0" description="暂无自动化项目" />
+            
+            <div v-else class="group-section-collapse">
+              <el-collapse v-model="activeNames">
+                <el-collapse-item v-for="(group, groupName) in groupedProjects" :key="groupName" :name="groupName">
+                  <template #title>
+                    <div class="group-header custom-collapse-header">
+                      <div class="group-header-left">
+                        <el-icon class="collapse-icon" style="margin-right: 8px">
+                          <ArrowRight v-if="!activeNames.includes(groupName)" />
+                          <ArrowDown v-else />
+                        </el-icon>
+                        <span class="group-title">{{ group.title || groupName }}</span>
+                        <el-tag type="info" size="small" style="margin-left: 10px">{{ group.items.length }} 个测试用例</el-tag>
+                        
+                        <!-- Project Info Fields -->
+                        <div class="project-info-tags" v-if="group.info && Object.keys(group.info).length > 0">
+                          <el-tag v-if="group.info.product_type" size="small" effect="light" type="primary" class="info-tag" round>
+                            <el-icon><Monitor /></el-icon> {{ group.info.product_type }}
+                          </el-tag>
+                          <el-tag v-if="group.info.system_type" size="small" effect="light" type="warning" class="info-tag" round>
+                            <el-icon><Platform /></el-icon> {{ group.info.system_type }}
+                          </el-tag>
+                          <el-tag v-if="group.info.environment" size="small" effect="light" type="success" class="info-tag" round>
+                            <el-icon><Connection /></el-icon> {{ group.info.environment }}
+                          </el-tag>
+                          <el-tag v-if="group.info.product_id" size="small" effect="plain" type="info" class="info-tag" round>
+                            <el-icon><CollectionTag /></el-icon> {{ group.info.product_id }}
+                          </el-tag>
+                          <el-tag v-if="group.info.version_number" size="small" effect="plain" type="info" class="info-tag" round>
+                            <el-icon><InfoFilled /></el-icon> {{ group.info.version_number }}
+                          </el-tag>
+                        </div>
+                      </div>
+                      
+                      <div class="group-header-right" @click.stop>
+                        <el-button type="success" size="small" :icon="VideoPlay" @click="handleBatchExecute(group.items)">批量执行</el-button>
+                        <el-button type="primary" size="small" :icon="Plus" @click="openCreateModal(group.info)">添加项目</el-button>
+                      </div>
+                    </div>
+                  </template>
+                  
+                  <el-table :data="group.items" style="width: 100%" :row-class-name="tableRowClassName" border stripe :header-cell-style="{ background: '#f5f7fa', color: '#606266', fontWeight: 'bold' }">
+                    <el-table-column label="ID" width="80">
+                      <template #default="scope">
+                        {{ scope.$index + 1 }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="level" label="优先级" width="80">
+                      <template #default="scope">
+                        <el-tag size="small" :type="getLevelType(scope.row.level)">{{ scope.row.level || 'P0' }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="process_name" label="流程名称" width="250"/>
+                    <el-table-column prop="environment" label="环境" width="90">
+                      <template #default="scope">
+                        <el-tag size="small">{{ scope.row.environment }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="des_status" label="状态" width="80">
+                      <template #default="scope">
+                        <el-tag size="small" :type="scope.row.des_status === '完成' ? 'success' : 'primary'">{{ scope.row.des_status || '进行中' }}</el-tag>
+                      </template>
+                    </el-table-column>
+                    
+                    <el-table-column prop="created_by" label="创建人" width="80"/>
+                    <el-table-column prop="start_time" label="预计开始" width="120">
+                      <template #default="scope">
+                        {{ scope.row.start_time ? scope.row.start_time.substring(0, 10) : '-' }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="end_time" label="预计结束" width="120">
+                      <template #default="scope">
+                        {{ scope.row.end_time ? scope.row.end_time.substring(0, 10) : '-' }}
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="status" label="最近状态" width="100">
+                      <template #default="scope">
+                        <div style="display: flex; align-items: center">
+                            <el-icon v-if="scope.row.status === 'Running'" class="is-loading" style="margin-right: 5px"><Loading /></el-icon>
+                            <el-tag :type="getStatusType(scope.row.status)">{{ scope.row.status || '待执行' }}</el-tag>
+                        </div>
+                      </template>
+                    </el-table-column>
+                    <el-table-column prop="updated_at" label="更新时间" width="160"/>
+                    
+                    <el-table-column label="操作" fixed="right" width="380">
+                      <template #default="scope">
+                        <el-button link type="primary" size="small" @click="handleExecute(scope.row)">执行测试</el-button>
+                        <el-button link type="primary" size="small" @click="handleTestConnection(scope.row)">测试连接</el-button>
+                        <el-button link type="primary" size="small" @click="handleCodeManage(scope.row)">代码管理</el-button>
+                        <el-button link type="primary" size="small" @click="handleEdit(scope.row)">编辑</el-button>
+                        <el-button link type="primary" size="small" @click="handleHistory(scope.row)">执行记录</el-button>
+                        <el-button link type="danger" size="small" @click="handleDelete(scope.row)">删除</el-button>
+                      </template>
+                    </el-table-column>
+                  </el-table>
+                </el-collapse-item>
+              </el-collapse>
+            </div>
+          </div>
+
+          <CommonPagination
+            v-model:current-page="currentPage"
+            v-model:page-size="pageSize"
+            :total="total"
+            @change="fetchProjects"
+          />
+        </div>
+      </el-main>
+    </el-container>
 
       <!-- Modals -->
       <AutomationProjectModal 
@@ -170,10 +302,24 @@
 
 <script setup>
 import { ref, onMounted, computed, onBeforeUnmount } from 'vue'
-import { Plus, VideoPlay, ArrowRight, ArrowDown, Monitor, Platform, Connection, CollectionTag, InfoFilled, Loading, Search, Refresh } from '@element-plus/icons-vue'
+import { Plus, VideoPlay, ArrowRight, ArrowDown, Monitor, Platform, Connection, CollectionTag, InfoFilled, Loading, Search, Refresh, Menu, Clock, CircleCheck, CircleClose, Briefcase, Filter, CirclePlus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 import { getProjectOptions, getEnumValues } from '@/api/AutomationPlatform/WebAutomation/ProductManagement'
+import '@/assets/css/AutomationPlatform/WebAutomation/AutomationManagementView.css'
+
+const processOptions = ref([])
+
+const fetchProcessOptions = async () => {
+  try {
+    const res = await axios.get('/api/automation/management/test_projects/options')
+    if (res.data.code === 200) {
+      processOptions.value = res.data.data
+    }
+  } catch (e) {
+    console.error(e)
+  }
+}
 
 import AutomationProjectModal from './components/AutomationProjectModal.vue'
 import ExecutionHistoryDrawer from './components/ExecutionHistoryDrawer.vue'
@@ -185,6 +331,31 @@ import { getStatusType } from '@/utils/format'
 
 import { useUserStore } from '@/store/Auth/user'
 
+const tableRowClassName = ({ row }) => {
+  if (row.end_time) {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const endTime = new Date(row.end_time)
+    endTime.setHours(0, 0, 0, 0)
+    
+    if (today > endTime) {
+      return 'expired-row'
+    }
+  }
+  return ''
+}
+
+const getLevelType = (level) => {
+  switch (level) {
+    case 'P0': return 'danger'
+    case 'P1': return 'warning'
+    case 'P2': return 'primary'
+    case 'P3': return 'info'
+    default: return 'info'
+  }
+}
+
 const loading = ref(false)
 const projectList = ref([])
 const groupedProjects = ref({})
@@ -192,6 +363,16 @@ const activeNames = ref([])
 const currentPage = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
+const activeMenu = ref('all')
+const currentTitle = ref('所有项目')
+const statistics = ref({
+  all: 0,
+  pending: 0,
+  running: 0,
+  passed: 0,
+  failed: 0,
+  products: []
+})
 
 // Modal States
 const modalVisible = ref(false)
@@ -200,12 +381,18 @@ const currentProject = ref(null)
 // Search Filters
 const queryParams = ref({
   product_names: [],
-  process_name: '',
+  process_name: [], // Changed to array for multiple selection
   status: [],
-  environment: ''
+  environment: '',
+  level: [],
+  des_status: [],
+  created_by: [],
+  start_time: '',
+  end_time: ''
 })
 const productOptions = ref([])
 const envOptions = ref([])
+const creatorOptions = ref([])
 
 // Test Connection & Code Editor States
 const testConnectionVisible = ref(false)
@@ -225,10 +412,64 @@ const pollingProjects = ref(new Set())
 
 onMounted(() => {
   fetchFilterOptions()
+  fetchProcessOptions()
   fetchProjects()
+  fetchStatistics()
   // Start global polling checker
   pollingTimer = setInterval(checkPollingProjects, POLLING_INTERVAL)
 })
+
+const fetchStatistics = async () => {
+  try {
+    const res = await axios.get('/api/automation/management/statistics')
+    if (res.data.code === 200) {
+      statistics.value = res.data.data
+    }
+  } catch (e) {
+    console.error('Fetch statistics error', e)
+  }
+}
+
+const handleMenuSelect = (index) => {
+  if (activeMenu.value === index) return
+  activeMenu.value = index
+  currentPage.value = 1
+  
+  // Reset specific filters
+  queryParams.value.status = []
+  queryParams.value.product_names = []
+  
+  if (index === 'all') {
+    currentTitle.value = '所有项目'
+  } else if (index.startsWith('status-')) {
+    const statusMap = {
+      'status-pending': '待执行',
+      'status-running': 'Running',
+      'status-passed': 'passed', // Need to confirm if DB uses 'passed' or 'Success'
+      'status-failed': 'failed'
+    }
+    const status = statusMap[index]
+    if (status) {
+      queryParams.value.status = [status]
+      // Update title based on selection
+      if (status === '待执行') currentTitle.value = '待执行项目'
+      else if (status === 'Running') currentTitle.value = '进行中项目'
+      else if (status === 'passed') currentTitle.value = '成功项目'
+      else if (status === 'failed') currentTitle.value = '失败项目'
+    }
+  } else if (index.startsWith('product-')) {
+    const productName = index.replace('product-', '')
+    queryParams.value.product_names = [productName]
+    currentTitle.value = productName
+  }
+  
+  fetchProjects()
+}
+
+const handleRefresh = () => {
+  fetchProjects()
+  fetchStatistics()
+}
 
 const fetchFilterOptions = async () => {
   try {
@@ -239,6 +480,11 @@ const fetchFilterOptions = async () => {
     const envRes = await getEnumValues('environment')
     if (envRes.code === 200) {
       envOptions.value = envRes.data
+    }
+    // Fetch creator options
+    const creatorRes = await axios.get('/api/automation/management/test_projects/creators')
+    if (creatorRes.data.code === 200) {
+      creatorOptions.value = creatorRes.data.data
     }
   } catch (e) {
     console.error(e)
@@ -253,10 +499,17 @@ const handleSearch = () => {
 const resetQuery = () => {
   queryParams.value = {
     product_names: [],
-    process_name: '',
+    process_name: [],
     status: [],
-    environment: ''
+    environment: '',
+    level: [],
+    des_status: [],
+    created_by: [],
+    start_time: '',
+    end_time: ''
   }
+  activeMenu.value = 'all'
+  currentTitle.value = '所有项目'
   handleSearch()
 }
 
@@ -284,8 +537,20 @@ const checkPollingProjects = async () => {
     if (params.product_names && params.product_names.length > 0) {
       params.product_names = params.product_names.join(',')
     }
+    if (params.process_name && params.process_name.length > 0) {
+      params.process_name = params.process_name.join(',')
+    }
     if (params.status && params.status.length > 0) {
       params.status = params.status.join(',')
+    }
+    if (params.level && params.level.length > 0) {
+      params.level = params.level.join(',')
+    }
+    if (params.des_status && params.des_status.length > 0) {
+      params.des_status = params.des_status.join(',')
+    }
+    if (params.created_by && params.created_by.length > 0) {
+      params.created_by = params.created_by.join(',')
     }
     
     const res = await axios.get('/api/automation/management/test_projects', { params })
@@ -341,9 +606,25 @@ const fetchProjects = async () => {
     if (params.product_names && params.product_names.length > 0) {
       params.product_names = params.product_names.join(',')
     }
+    if (params.process_name && params.process_name.length > 0) {
+      params.process_name = params.process_name.join(',')
+    }
     if (params.status && params.status.length > 0) {
       params.status = params.status.join(',')
     }
+    if (params.level && params.level.length > 0) {
+      params.level = params.level.join(',')
+    }
+    if (params.des_status && params.des_status.length > 0) {
+      params.des_status = params.des_status.join(',')
+    }
+    if (params.created_by && params.created_by.length > 0) {
+      params.created_by = params.created_by.join(',')
+    }
+    
+    // Remove empty date params
+    if (!params.start_time) delete params.start_time
+    if (!params.end_time) delete params.end_time
 
     const res = await axios.get('/api/automation/management/test_projects', { params })
     if (res.data.code === 200) {
@@ -381,17 +662,25 @@ const groupProjects = (list) => {
        groupKey = projectInfo.product_id ? `${groupTitle}_${projectInfo.product_id}` : groupTitle
     } else if (item.product_package_names) {
       let names = item.product_package_names
-      if (names.startsWith('[') && names.endsWith(']')) {
-         try {
-           const parsed = JSON.parse(names)
-           if (parsed.length > 0) {
-             groupTitle = parsed[0]
-             groupKey = groupTitle
-           }
-         } catch(e) {}
-      } else {
-        groupTitle = names.split(',')[0]
-        groupKey = groupTitle
+      // Handle both string (JSON or comma-separated) and array formats
+      if (Array.isArray(names)) {
+        if (names.length > 0) {
+          groupTitle = names[0]
+          groupKey = groupTitle
+        }
+      } else if (typeof names === 'string') {
+        if (names.startsWith('[') && names.endsWith(']')) {
+           try {
+             const parsed = JSON.parse(names)
+             if (Array.isArray(parsed) && parsed.length > 0) {
+               groupTitle = parsed[0]
+               groupKey = groupTitle
+             }
+           } catch(e) {}
+        } else {
+          groupTitle = names.split(',')[0]
+          groupKey = groupTitle
+        }
       }
     } else if (item.product_ids) {
        groupTitle = `Product ${item.product_ids}`
@@ -480,7 +769,8 @@ const openCreateModal = (info) => {
 }
 
 const handleEdit = (row) => {
-  currentProject.value = { ...row } // 深拷贝避免直接修改原始数据
+  // 使用 JSON 序列化进行深拷贝，断开与表格数据的引用关联，防止编辑未保存时污染表格数据
+  currentProject.value = JSON.parse(JSON.stringify(row))
   modalVisible.value = true
 }
 
@@ -712,8 +1002,13 @@ const handleHistory = (row) => {
 :deep(.el-table th.el-table__cell:last-child) {
   border-top-right-radius: 0;
 }
+
 :deep(.el-table) {
   border-radius: 0;
   --el-table-border-radius-base: 0px;
+}
+
+:deep(.expired-row) {
+  --el-table-tr-bg-color: var(--el-color-danger-light-9);
 }
 </style>

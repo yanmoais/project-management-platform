@@ -218,6 +218,58 @@ class SysUserPost(Base):
     is_primary: Mapped[int] = mapped_column(Integer, default=0)
     create_time: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.now)
 
+class SysNotification(Base):
+    """
+    站内信/通知表
+    """
+    __tablename__ = 'sys_notification'
+
+    notification_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    type: Mapped[Optional[str]] = mapped_column(String(50), default='system')
+    target_id: Mapped[Optional[int]] = mapped_column(BigInteger)
+    target_type: Mapped[Optional[str]] = mapped_column(String(50))
+    is_read: Mapped[int] = mapped_column(Integer, default=0) # 0:unread, 1:read
+    create_time: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.now)
+    read_time: Mapped[Optional[datetime]] = mapped_column(DateTime)
+
+    def to_dict(self):
+        return {
+            'notification_id': self.notification_id,
+            'user_id': self.user_id,
+            'title': self.title,
+            'content': self.content,
+            'type': self.type,
+            'target_id': self.target_id,
+            'target_type': self.target_type,
+            'is_read': self.is_read,
+            'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None,
+            'read_time': self.read_time.strftime('%Y-%m-%d %H:%M:%S') if self.read_time else None
+        }
+
+class SysUserFollow(Base):
+    """
+    统一关注表
+    """
+    __tablename__ = 'sys_user_follow'
+
+    follow_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    target_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    target_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    create_time: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.now)
+
+    def to_dict(self):
+        return {
+            'follow_id': self.follow_id,
+            'user_id': self.user_id,
+            'target_id': self.target_id,
+            'target_type': self.target_type,
+            'create_time': self.create_time.strftime('%Y-%m-%d %H:%M:%S') if self.create_time else None
+        }
+
 class AppUserLog(Base):
     """
     用户登录日志表

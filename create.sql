@@ -614,6 +614,8 @@ CREATE TABLE `automation_projects` (
   `created_by` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'admin',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `del_flag` int DEFAULT '0' COMMENT '删除标志(0:正常,1:逻辑删除)',
+  `level` varchar(10) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'P0' COMMENT '优先级 (P0, P1, P2, P3)',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=140 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -683,3 +685,118 @@ CREATE TABLE IF NOT EXISTS `projects_log` (
   KEY `idx_user_id` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='产品操作日志表';
 
+-- 任务表
+CREATE TABLE IF NOT EXISTS pm_task (
+    task_id BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '任务ID',
+    task_code VARCHAR(50) DEFAULT NULL COMMENT '任务编码',
+    title VARCHAR(200) NOT NULL COMMENT '标题',
+    estimate_time DECIMAL(10,2) DEFAULT 0 COMMENT '预估工时',
+    assignee_id BIGINT(20) DEFAULT NULL COMMENT '处理人ID',
+    status VARCHAR(50) DEFAULT 'Pending' COMMENT '状态',
+    requirement_id BIGINT(20) NOT NULL COMMENT '需求ID',
+    create_by VARCHAR(64) DEFAULT NULL COMMENT '创建者',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by VARCHAR(64) DEFAULT NULL COMMENT '更新者',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    del_flag INT DEFAULT 0 COMMENT '删除标志',
+    PRIMARY KEY (task_id),
+    KEY idx_requirement_id (requirement_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务表';
+
+-- 2026-02-25 Add fields to pm_task table
+ALTER TABLE pm_task ADD COLUMN priority VARCHAR(20) DEFAULT 'Medium' COMMENT '优先级';
+ALTER TABLE pm_task ADD COLUMN start_date DATE DEFAULT NULL COMMENT '预计开始时间';
+ALTER TABLE pm_task ADD COLUMN end_date DATE DEFAULT NULL COMMENT '预计结束时间';
+ALTER TABLE pm_task ADD COLUMN sort_order INT DEFAULT 0 COMMENT '排序';
+
+-- 2026-02-25 Add pm_sub_requirement table
+CREATE TABLE IF NOT EXISTS pm_sub_requirement (
+    sub_req_id BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '子需求ID',
+    sub_req_code VARCHAR(50) DEFAULT NULL COMMENT '子需求编码',
+    title VARCHAR(200) NOT NULL COMMENT '标题',
+    type VARCHAR(50) DEFAULT 'product' COMMENT '类型',
+    priority VARCHAR(20) DEFAULT 'Medium' COMMENT '优先级',
+    status VARCHAR(50) DEFAULT 'not_started' COMMENT '状态',
+    requirement_id BIGINT(20) NOT NULL COMMENT '父需求ID',
+    assignee_id BIGINT(20) DEFAULT NULL COMMENT '处理人ID',
+    start_date DATE DEFAULT NULL COMMENT '预计开始时间',
+    end_date DATE DEFAULT NULL COMMENT '预计结束时间',
+    risk_level VARCHAR(20) DEFAULT 'Low' COMMENT '风险等级',
+    sort_order INT DEFAULT 0 COMMENT '排序',
+    create_by VARCHAR(64) DEFAULT NULL COMMENT '创建者',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_by VARCHAR(64) DEFAULT NULL COMMENT '更新者',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    del_flag INT DEFAULT 0 COMMENT '删除标志',
+    completed_at DATETIME DEFAULT NULL COMMENT '完成时间',
+    PRIMARY KEY (sub_req_id),
+    KEY idx_requirement_id (requirement_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='子需求表';
+
+-- 2026-02-28 Add completed_at to pm_requirement, pm_sub_requirement, pm_task
+ALTER TABLE pm_requirement ADD COLUMN completed_at DATETIME DEFAULT NULL COMMENT '完成时间';
+ALTER TABLE pm_sub_requirement ADD COLUMN completed_at DATETIME DEFAULT NULL COMMENT '完成时间';
+ALTER TABLE pm_task ADD COLUMN completed_at DATETIME DEFAULT NULL COMMENT '完成时间';
+
+-- 2026-03-03 Add developer_id and tester_id to pm_sub_requirement and pm_task
+ALTER TABLE pm_sub_requirement ADD COLUMN developer_id BIGINT(20) DEFAULT NULL COMMENT '开发人员ID';
+ALTER TABLE pm_sub_requirement ADD COLUMN tester_id BIGINT(20) DEFAULT NULL COMMENT '测试人员ID';
+
+ALTER TABLE pm_task ADD COLUMN developer_id BIGINT(20) DEFAULT NULL COMMENT '开发人员ID';
+ALTER TABLE pm_task ADD COLUMN tester_id BIGINT(20) DEFAULT NULL COMMENT '测试人员ID';
+
+-- 2026-03-05 Add progress and completed_at to pm_defect
+ALTER TABLE pm_defect ADD COLUMN progress INT DEFAULT 0 COMMENT '进度';
+ALTER TABLE pm_defect ADD COLUMN completed_at DATETIME DEFAULT NULL COMMENT '完成时间';
+ALTER TABLE pm_defect ADD COLUMN attachments TEXT COMMENT '附件列表JSON';
+
+CREATE TABLE `test_case` (
+  `case_id` int NOT NULL AUTO_INCREMENT COMMENT '用例ID',
+  `case_code` varchar(50) NOT NULL COMMENT '用例编号',
+  `case_name` varchar(200) NOT NULL COMMENT '用例名称',
+  `case_type` int DEFAULT '1' COMMENT '用例类型(1:功能测试,2:性能测试,3:安全性测试,4:回归测试,5:其他)',
+  `case_status` int DEFAULT '0' COMMENT '用例状态(0:未执行,1:通过,2:阻塞,3:失败,4:遗留)',
+  `case_level` varchar(20) DEFAULT 'P1' COMMENT '用例等级(P0, P1, P2, P3)',
+  `module_id` int DEFAULT NULL COMMENT '所属模块ID',
+  `req_id` int DEFAULT NULL COMMENT '关联需求ID',
+  `project_id` int DEFAULT NULL COMMENT '所属项目ID',
+  `plan_id` int DEFAULT NULL COMMENT '所属计划ID',
+  `create_by` varchar(64) DEFAULT NULL COMMENT '创建人(昵称)',
+  `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
+  `comments` JSON DEFAULT NULL COMMENT '评论列表',
+  `pre_condition` text DEFAULT NULL COMMENT '前置条件',
+  `steps` text DEFAULT NULL COMMENT '执行步骤',
+  `expected_result` text DEFAULT NULL COMMENT '预期结果',
+  PRIMARY KEY (`case_id`),
+  UNIQUE KEY `case_code` (`case_code`),
+  KEY `module_id` (`module_id`),
+  KEY `req_id` (`req_id`),
+  KEY `project_id` (`project_id`),
+  KEY `plan_id` (`plan_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='测试用例表';
+
+-- 2026-03-11 Add case_id to pm_defect
+ALTER TABLE pm_defect ADD COLUMN case_id BIGINT DEFAULT NULL COMMENT '关联测试用例ID';
+
+-- 2026-03-12 Update Test Plan table
+CREATE TABLE IF NOT EXISTS test_plan (
+    plan_id INT NOT NULL AUTO_INCREMENT COMMENT '计划ID',
+    plan_name VARCHAR(100) NOT NULL COMMENT '计划名称',
+    version VARCHAR(50) DEFAULT NULL COMMENT '版本',
+    status INT DEFAULT 1 COMMENT '状态(1:进行中,2:已结束)',
+    owner_id INT DEFAULT NULL COMMENT '测试负责人ID',
+    start_time DATE DEFAULT NULL COMMENT '开始时间',
+    end_time DATE DEFAULT NULL COMMENT '结束时间',
+    create_by VARCHAR(64) DEFAULT NULL COMMENT '创建人(昵称)',
+    create_time DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    remark VARCHAR(500) DEFAULT NULL COMMENT '备注',
+    PRIMARY KEY (plan_id),
+    KEY idx_owner_id (owner_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='测试计划表';
+
+ALTER TABLE test_plan ADD COLUMN project_id INT DEFAULT NULL COMMENT '所属项目ID';
+ALTER TABLE test_plan ADD INDEX idx_project_id (project_id);
+ALTER TABLE test_plan ADD COLUMN associated_case_ids JSON DEFAULT NULL COMMENT '关联测试用例ID列表';

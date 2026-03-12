@@ -98,7 +98,16 @@ async def login(
     return {
         'code': 200,
         'msg': 'Login successful',
-        'data': user.to_dict()
+        'token': access_token,
+        'data': {
+            'token': access_token,
+            'user_info': {
+                'id': user.user_id,
+                'username': user.username,
+                'nickname': user.nickname,
+                'avatar': user.avatar
+            }
+        }
     }
 
 @router.post("/register")

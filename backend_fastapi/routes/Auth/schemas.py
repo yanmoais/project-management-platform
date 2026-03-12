@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional, List
+from typing import Optional, List, Any
 
 class Token(BaseModel):
     """
@@ -50,5 +50,5 @@ class LoginResponse(BaseModel):
     """
     code: int
     msg: str
-    data: Optional[UserResponse] = None
-    # token: str # 放到 header 中
+    data: Optional[Any] = None
+    token: Optional[str] = None

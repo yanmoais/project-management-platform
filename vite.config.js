@@ -16,6 +16,10 @@ export default defineConfig({
         target: 'http://localhost:5000',
         changeOrigin: true,
         // rewrite: (path) => path.replace(/^\/api/, '') // Flask bp has url_prefix='/api', so no need to rewrite
+      },
+      '/static': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
       }
     }
   }

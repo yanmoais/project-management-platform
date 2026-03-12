@@ -1,4 +1,15 @@
+@import "@/assets/css/common/layout.css";
+
 /* 项目管理 样式文件 */
-.page-container {
+.project-mgt-view {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.overview-container {
+  height: 100%;
+  overflow-y: auto;
   padding: 20px;
 }

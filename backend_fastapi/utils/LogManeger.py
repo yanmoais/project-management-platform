@@ -98,7 +98,7 @@ class DatabaseLogHandler(logging.Handler):
         if not db_uri:
              # Fallback
             return pymysql.connect(
-                host='localhost',
+                host='127.0.0.1',
                 user='root',
                 password='123456',
                 database='automation',
@@ -133,7 +133,7 @@ class DatabaseLogHandler(logging.Handler):
         
         # 解析失败时的兜底
         return pymysql.connect(
-            host='localhost',
+            host='127.0.0.1',
             user='root',
             password='123456',
             database='automation',

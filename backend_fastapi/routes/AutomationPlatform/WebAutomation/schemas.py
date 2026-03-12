@@ -1,5 +1,6 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List, Dict, Union, Any
+from datetime import datetime
 
 # ==========================================
 # Automation Management Models
@@ -13,6 +14,7 @@ class GetLoginAccountsRequest(BaseModel):
 
 class CreateProjectRequest(BaseModel):
     process_name: str
+    level: Optional[str] = "P0"
     product_ids: Optional[Union[List[Union[str, Dict]], str]] = None
     system: Optional[str] = None
     product_type: Optional[str] = None
@@ -25,9 +27,20 @@ class CreateProjectRequest(BaseModel):
     assertion_config: Optional[Union[Dict, List]] = None
     screenshot_config: Optional[Union[Dict, List]] = None
     created_by: Optional[str] = "admin"
+    des_status: Optional[str] = "进行中"
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+    @field_validator('start_time', 'end_time', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 class UpdateProjectRequest(BaseModel):
     process_name: Optional[str] = None
+    level: Optional[str] = None
     product_ids: Optional[Union[List[Union[str, Dict]], str]] = None
     system: Optional[str] = None
     product_type: Optional[str] = None
@@ -40,6 +53,16 @@ class UpdateProjectRequest(BaseModel):
     assertion_config: Optional[Union[Dict, List]] = None
     screenshot_config: Optional[Union[Dict, List]] = None
     update_by: Optional[str] = None
+    des_status: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+
+    @field_validator('start_time', 'end_time', mode='before')
+    @classmethod
+    def empty_str_to_none(cls, v):
+        if v == "":
+            return None
+        return v
 
 class ExecuteProjectRequest(BaseModel):
     executed_by: Optional[str] = "admin"

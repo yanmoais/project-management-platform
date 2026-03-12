@@ -82,42 +82,62 @@ class CaptchaSolver:
             except Exception as e:
                 log_error(f"[{task_id}] 加载模板 {path} 失败: {e}")
 
-    def _enhance_image(self, image_bytes, task_id):
+    def _get_image_variants(self, image_bytes, task_id):
         """
-        图像预处理：增强对比度，二值化，以便更清晰地识别运算符
+        生成图像的多种变体，用于不同策略的识别
+        1. 蓝色掩码版 (针对彩色验证码)
+        2. 灰度增强版 (通用)
+        3. 原图 (兜底)
         """
+        variants = {}
         try:
-            # 字节转 numpy 数组
             nparr = np.frombuffer(image_bytes, np.uint8)
-            # 解码为图像
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is None: return {'original': image_bytes}
             
-            if img is None:
-                return image_bytes
-
-            # 1. 尝试去除噪点 (非局部均值去噪)
-            # h=10 (强度), templateWindowSize=7, searchWindowSize=21
-            denoised = cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
-
-            # 2. 转灰度
-            gray = cv2.cvtColor(denoised, cv2.COLOR_BGR2GRAY)
+            variants['original'] = image_bytes
             
-            # 3. 自适应阈值二值化 (比固定阈值更适合光照/背景不均匀的情况)
-            # blockSize=11, C=2
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                         cv2.THRESH_BINARY, 11, 2)
-            
-            # 4. 形态学操作：开运算去除微小噪点
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-            opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+            # --- 变体 1: 蓝色掩码 (Blue Mask) ---
+            try:
+                hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+                # 放宽蓝色范围: H(80-150), S(30-255), V(30-255)
+                lower_blue = np.array([80, 30, 30])
+                upper_blue = np.array([150, 255, 255])
+                mask = cv2.inRange(hsv, lower_blue, upper_blue)
+                
+                if cv2.countNonZero(mask) > img.shape[0] * img.shape[1] * 0.005: # 0.5% 像素
+                    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+                    mask_closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+                    result_blue = cv2.bitwise_not(mask_closed) # 白底黑字
+                    success, enc_blue = cv2.imencode('.png', result_blue)
+                    if success:
+                        variants['blue_mask'] = enc_blue.tobytes()
+            except Exception:
+                pass
 
-            success, encoded_image = cv2.imencode('.png', opened)
-            if success:
-                return encoded_image.tobytes()
-            return image_bytes
+            # --- 变体 2: 灰度增强 (Grayscale Enhanced) ---
+            try:
+                denoised = cv2.medianBlur(img, 3)
+                gray = cv2.cvtColor(denoised, cv2.COLOR_BGR2GRAY)
+                binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                             cv2.THRESH_BINARY, 13, 3)
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+                opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+                success, enc_gray = cv2.imencode('.png', opened)
+                if success:
+                    variants['gray_enhanced'] = enc_gray.tobytes()
+            except Exception:
+                pass
+                
         except Exception as e:
-            log_info(f"[{task_id}] 图像预处理失败，使用原图: {str(e)}")
-            return image_bytes
+            log_info(f"[{task_id}] 图像变体生成失败: {str(e)}")
+            
+        return variants
+
+    def _enhance_image(self, image_bytes, task_id):
+        # 保留此方法兼容旧调用，默认返回灰度增强版或原图
+        variants = self._get_image_variants(image_bytes, task_id)
+        return variants.get('gray_enhanced') or variants.get('blue_mask') or image_bytes
 
     def _distinguish_plus_multiply(self, roi, task_id):
         """
@@ -143,11 +163,10 @@ class CaptchaSolver:
             edges = cv2.Canny(binary_roi, 50, 150)
             
             # 参数调整：
-            # threshold: 投票阈值，放大后可以稍微大一点，避免噪点
-            # minLineLength: 至少 5 个像素 (更宽松)
-            # threshold: 10 (更宽松)
-            lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=10, 
-                                  minLineLength=5, maxLineGap=5)
+            # threshold: 投票阈值，放大后可以稍微大一点，避免噪点 (原10 -> 15)
+            # minLineLength: 至少 8 个像素 (原5 -> 8)
+            lines = cv2.HoughLinesP(edges, 1, np.pi/180, threshold=15, 
+                                  minLineLength=8, maxLineGap=5)
             
             ortho_count = 0 # 正交线 (0, 90度) -> +
             diag_count = 0  # 对角线 (45, 135度) -> *
@@ -159,20 +178,21 @@ class CaptchaSolver:
                     # 归一化到 0-180
                     if angle > 180: angle -= 180
                     
-                    # 修正角度判定范围
-                    # 正交: 0(180)±10, 90±10
-                    if (angle <= 10) or (angle >= 170) or (80 <= angle <= 100):
+                    # 修正角度判定范围 (更严格)
+                    # 正交: 0(180)±15, 90±15
+                    if (angle <= 15) or (angle >= 165) or (75 <= angle <= 105):
                         ortho_count += 1
-                    # 对角: 45±15, 135±15
-                    elif (30 <= angle <= 60) or (120 <= angle <= 150):
+                    # 对角: 45±10, 135±10 (更严格)
+                    elif (35 <= angle <= 55) or (125 <= angle <= 145):
                         diag_count += 1
             
             # 添加task_id前缀
             log_info(f"[{task_id}] Hough Check (Scaled): Ortho={ortho_count}, Diag={diag_count}")
             
-            # 只要检测到对角线，且对角线数量不显著少于正交线，就认为是 *
+            # 只要检测到显著的对角线，且对角线数量不显著少于正交线，就认为是 *
             # (因为 + 号很少会有长对角线，而 x 号可能有短正交线噪音)
-            if diag_count > 0 and diag_count >= ortho_count * 0.5:
+            # 修正判定：只有当 diag 确实多，或者比例很高时才认为是 *
+            if diag_count > 0 and diag_count >= ortho_count * 0.8: # 原 0.5 -> 0.8
                 return '*'
             
             # 如果正交线占主导，则是 +
@@ -225,13 +245,28 @@ class CaptchaSolver:
             if img is None: return None
 
             gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            # 自适应阈值二值化 (黑底白字)
-            binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
-                                         cv2.THRESH_BINARY_INV, 11, 2)
             
-            # 去噪
-            kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
-            opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+            # --- 策略 1: 颜色提取 (优先尝试) ---
+            # 为了让 CV 轮廓检测更精准，如果能提取出干净的蓝色文字，效果最好
+            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+            lower_blue = np.array([90, 50, 50])
+            upper_blue = np.array([140, 255, 255])
+            mask = cv2.inRange(hsv, lower_blue, upper_blue)
+            
+            if cv2.countNonZero(mask) > img.shape[0] * img.shape[1] * 0.01:
+                # mask 是黑底白字 (前景255)，正是 findContours 需要的
+                # 做一点点闭运算连接字符
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+                opened = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+            else:
+                # --- 策略 2: 常规灰度二值化 (Fallback) ---
+                # 自适应阈值二值化 (黑底白字)
+                binary = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                                             cv2.THRESH_BINARY_INV, 11, 2)
+                
+                # 去噪
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
+                opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
 
             # 查找轮廓
             # 使用 RETR_LIST 以便捕获所有轮廓，防止因为外框导致内部数字被忽略
@@ -525,6 +560,9 @@ class CaptchaSolver:
 
         def parse_and_calc(text, forced_op=None):
             if not text: return None, None
+            # 预处理：先替换大写 B 为 8，避免转小写后混淆
+            text = text.replace('B', '8')
+            
             # 清理
             clean = text.lower().replace('x', '*').replace('×', '*').replace('÷', '/')
             clean = clean.replace('=', '').replace('?', '').replace('？', '').replace(' ', '')
@@ -534,11 +572,22 @@ class CaptchaSolver:
             clean = clean.replace('l', '1').replace('i', '1').replace('o', '0')
             clean = clean.replace('g', '9').replace('z', '2').replace('b', '6')
             clean = clean.replace('s', '5').replace('q', '9')
-            
+            clean = clean.replace('a', '4').replace('y', '7').replace('j', '7')
+            clean = clean.replace('c', '0') # 新增: c -> 0 (常见误识别)
+
             # 如果有强制运算符，优先使用
             if forced_op:
-                # 提取数字
-                digits = re.findall(r'\d', clean)
+                # 尝试分割字符串，而不是仅仅找数字
+                # 因为有时数字会被粘连，例如 9/3 识别为 93
+                # 如果 cv_op 存在，我们尝试在字符串中找 split point
+                
+                # 提取数字 (使用 \d+ 提取多位数字，修复之前只提取单数字的 bug)
+                digits = re.findall(r'\d+', clean)
+                
+                n1 = None
+                n2 = None
+                
+                # 策略 1: 标准提取
                 if len(digits) >= 2:
                     n1 = int(digits[0])
                     n2 = int(digits[1])
@@ -546,6 +595,21 @@ class CaptchaSolver:
                     # 特殊处理：如果运算符是 / 且 n2 是 0 (可能是 / 被误识别为 0)，尝试取第三个数字
                     if forced_op == '/' and n2 == 0 and len(digits) > 2:
                          n2 = int(digits[2])
+
+                # 策略 2: 粘连数字拆分 (Fallback)
+                elif len(digits) == 1:
+                    raw_num = digits[0]
+                    if len(raw_num) == 3:
+                        # 假设中间位是误识别的运算符 (例如 "713" -> 7, 3)
+                        n1 = int(raw_num[0])
+                        n2 = int(raw_num[2])
+                    elif len(raw_num) == 2:
+                        # 假设运算符丢失 (例如 "50" -> 5, 0)
+                        n1 = int(raw_num[0])
+                        n2 = int(raw_num[1])
+                
+                # 如果成功提取到两个数字，进行计算
+                if n1 is not None and n2 is not None:
                     
                     # 特殊处理：如果 n2 为 0 且 op 为 /，则无效
                     if forced_op == '/' and n2 == 0:
@@ -561,7 +625,6 @@ class CaptchaSolver:
                     if forced_op == '-' and n1 < n2:
                          # 检查原始 OCR 结果是否有 + 号
                          if '+' in clean or 't' in clean or 'f' in clean:
-                            #  log_info(f"[{task_id}] CV detected '-' but OCR suggests '+' and n1 < n2 ({n1} < {n2}). Switching to '+'.")
                              forced_op = '+'
                              result = str(n1 + n2)
                              return result, {'n1': n1, 'n2': n2, 'op': '+', 'src': 'ocr_correction'}
@@ -577,7 +640,6 @@ class CaptchaSolver:
                             pass
                         else:
                             # 除不尽，可能是误判
-                            # 尝试回退到减法? 不，相信 CV
                             pass
 
                     result = None
@@ -588,7 +650,15 @@ class CaptchaSolver:
                         elif forced_op == '/': result = str(int(n1 / n2))
                         
                         if result:
-                            return result, {'n1': n1, 'n2': n2, 'op': forced_op, 'src': 'cv_forced'}
+                            # 过滤负值结果 (根据业务逻辑，验证码结果不应为负)
+                            # 过滤超过2位数的结果 (根据业务逻辑，验证码结果通常是1-2位数)
+                            if int(result) < 0 or len(result) > 2:
+                                log_info(f"[{task_id}] 忽略无效结果(负数或>2位): {result}")
+                                return None, None
+                                
+                            # 如果使用了拆分策略，标记一下
+                            src = 'cv_split' if len(digits) == 1 else 'cv_forced'
+                            return result, {'n1': n1, 'n2': n2, 'op': forced_op, 'src': src}
                     except Exception:
                         pass
 
@@ -605,15 +675,28 @@ class CaptchaSolver:
                 elif op == '/': result = str(int(n1 / n2))
                 
                 if result:
+                    # 过滤负值结果
+                    # 过滤超过2位数的结果
+                    if int(result) < 0 or len(result) > 2:
+                        return None, None
                     return result, {'n1': n1, 'n2': n2, 'op': op}
             return None, None
 
         def heuristic_infer(text, forced_op=None):
             """启发式推断"""
             if not text: return None, None
-            clean = text.replace('=', '').replace('?', '').replace(' ', '')
+            # 增强清理逻辑 (同步 parse_and_calc 的修正)
+            clean = text.replace('B', '8')
+            clean = clean.lower().replace('=', '').replace('?', '').replace('？', '').replace(' ', '')
             
-            digits = re.findall(r'\d', clean)
+            clean = clean.replace('t', '+').replace('f', '+').replace('k', '+')
+            clean = clean.replace('l', '1').replace('i', '1').replace('o', '0')
+            clean = clean.replace('g', '9').replace('z', '2').replace('b', '6')
+            clean = clean.replace('s', '5').replace('q', '9')
+            clean = clean.replace('a', '4').replace('y', '7').replace('j', '7')
+            clean = clean.replace('c', '0') # 新增: c -> 0 (同步新增)
+            
+            digits = re.findall(r'\d+', clean)
             
             if len(digits) >= 2:
                 n1 = int(digits[0])
@@ -628,17 +711,24 @@ class CaptchaSolver:
                     elif forced_op == '*': result = str(n1 * n2)
                     elif forced_op == '/': result = str(int(n1 / n2))
                     if result:
+                        # 过滤负值结果
+                        # 过滤超过2位数的结果
+                        if int(result) < 0 or len(result) > 2:
+                            log_info(f"[{task_id}] 忽略无效结果 (heuristic, 负数或>2位): {result}")
+                            return None, None
                         log_info(f"[{task_id}] 使用 CV 运算符 ({forced_op}) 进行计算: {n1}{forced_op}{n2}={result}")
                         return result, {'n1': n1, 'n2': n2, 'op': forced_op}
 
                 # ... (原有的启发式逻辑作为 fallback)
                 if n1 == n2:
                     log_info(f"[{task_id}] 检测到可能的运算符丢失 (Result: {clean_val}, n1==n2)，优先尝试减法: {n1}-{n2}")
-                    return str(n1 - n2), {'n1': n1, 'n2': n2, 'op': '-'}
+                    res = str(n1 - n2)
+                    if int(res) >= 0: return res, {'n1': n1, 'n2': n2, 'op': '-'}
                 
                 if n2 == 1:
                     log_info(f"[{task_id}] 检测到可能的运算符丢失 (Result: {clean_val}, n2=1)，优先尝试减法: {n1}-{n2}")
-                    return str(n1 - n2), {'n1': n1, 'n2': n2, 'op': '-'}
+                    res = str(n1 - n2)
+                    if int(res) >= 0: return res, {'n1': n1, 'n2': n2, 'op': '-'}
 
                 if n2 == 0:
                     log_info(f"[{task_id}] 检测到可能的运算符丢失 (Result: {clean_val}, n2=0)，优先尝试乘法: {n1}*0")
@@ -651,12 +741,14 @@ class CaptchaSolver:
 
         def process_result(raw_text, strategy_name):
             if not raw_text: return
+            # 记录原始结果
             log_info(f"[{task_id}] 验证码原始识别结果 ({strategy_name}): {raw_text}")
             
             # 1. 常规解析 (带 CV 辅助)
+            # parse_and_calc 内部会进行字符清洗和数字提取
             res, info = parse_and_calc(raw_text, forced_op=cv_op)
             if res:
-                log_info(f"[{task_id}] 验证码计算成功 ({strategy_name}): {res}")
+                log_info(f"[{task_id}] 验证码计算成功 ({strategy_name}): {res} (From: {raw_text})")
                 candidates.append({
                     'strategy': strategy_name,
                     'result': res,
@@ -669,7 +761,7 @@ class CaptchaSolver:
             # 2. 启发式推断 (带 CV 辅助)
             res, info = heuristic_infer(raw_text, forced_op=cv_op)
             if res:
-                log_info(f"[{task_id}] 验证码计算成功 ({strategy_name} - Heuristic): {res}")
+                log_info(f"[{task_id}] 验证码计算成功 ({strategy_name} - Heuristic): {res} (From: {raw_text})")
                 candidates.append({
                     'strategy': strategy_name,
                     'result': res,
@@ -678,6 +770,16 @@ class CaptchaSolver:
                     'type': 'heuristic'
                 })
                 return
+            
+            # 如果解析失败，记录一下原因（可选）
+            # log_info(f"[{task_id}] 解析失败: {raw_text} -> 清洗后无法提取有效算式")
+
+        # ----------------------
+        # 获取图像变体
+        # ----------------------
+        image_variants = self._get_image_variants(image_bytes, task_id)
+        # 默认使用灰度增强版或原图作为基础，但 OCR 会遍历所有变体
+        base_image = image_variants.get('gray_enhanced') or image_variants.get('original')
 
         # ----------------------
         # Strategy A: EasyOCR
@@ -687,24 +789,26 @@ class CaptchaSolver:
                 # 限制字符集为数字和运算符
                 allow_list = '0123456789+-*/xX=?'
 
-                # 1. EasyOCR - Direct
-                results = self.reader.readtext(image_bytes, detail=0, allowlist=allow_list)
-                text_easy = "".join(results)
-                process_result(text_easy, "EasyOCR")
-
-                # 2. EasyOCR - Enhanced
-                enhanced_bytes = self._enhance_image(image_bytes, task_id)
-                results_enhanced = self.reader.readtext(enhanced_bytes, detail=0, allowlist=allow_list)
-                text_easy_enhanced = "".join(results_enhanced)
-                process_result(text_easy_enhanced, "EasyOCR-Enhanced")
+                # 遍历所有变体进行识别
+                for variant_name, variant_bytes in image_variants.items():
+                    try:
+                        results = self.reader.readtext(variant_bytes, detail=0, allowlist=allow_list)
+                        text = "".join(results)
+                        process_result(text, f"EasyOCR-{variant_name}")
+                    except Exception as e_var:
+                        log_info(f"[{task_id}] EasyOCR-{variant_name} 识别失败: {e_var}")
 
                 # 3. EasyOCR - Inverted & Dilated (Targeting thin operators like '-')
+                # 使用灰度增强版进行反转
                 try:
-                    # 转 numpy -> 解码 -> 转灰度 -> 二值化 -> 反转 -> 膨胀
-                    nparr = np.frombuffer(image_bytes, np.uint8)
+                    nparr = np.frombuffer(base_image, np.uint8)
                     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if img is not None:
-                        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                        if len(img.shape) == 3:
+                            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                        else:
+                            gray = img
+                        
                         # 二值化 (黑底白字)
                         _, binary_inv = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
                         # 膨胀 (让白色文字/运算符变粗)
@@ -727,27 +831,22 @@ class CaptchaSolver:
         # ----------------------
         if self.ocr:
             try:
-                # 图像增强
-                enhanced_bytes = self._enhance_image(image_bytes, task_id)
+                # 遍历所有变体进行识别
+                for variant_name, variant_bytes in image_variants.items():
+                    # 1. ddddocr - Beta Model
+                    if hasattr(self, 'ocr_beta') and self.ocr_beta:
+                        text_beta = self.ocr_beta.classification(variant_bytes)
+                        process_result(text_beta, f"ddddocr-Beta-{variant_name}")
 
-                # 1. ddddocr - Beta Model
-                if hasattr(self, 'ocr_beta') and self.ocr_beta:
-                    text_beta = self.ocr_beta.classification(enhanced_bytes)
-                    process_result(text_beta, "ddddocr-Beta")
+                    # 2. ddddocr - Direct (Standard Model)
+                    text_dd = self.ocr.classification(variant_bytes)
+                    process_result(text_dd, f"ddddocr-Standard-{variant_name}")
 
-                # 2. ddddocr - Direct (Standard Model)
-                text_dd = self.ocr.classification(enhanced_bytes)
-                process_result(text_dd, "ddddocr-Standard")
-
-                # 3. ddddocr - Old Model
-                if self.ocr_old:
-                    text_dd_old = self.ocr_old.classification(enhanced_bytes)
-                    process_result(text_dd_old, "ddddocr-Old")
+                    # 3. ddddocr - Old Model
+                    if self.ocr_old:
+                        text_dd_old = self.ocr_old.classification(variant_bytes)
+                        process_result(text_dd_old, f"ddddocr-Old-{variant_name}")
                 
-                # 4. ddddocr - Raw Image
-                text_raw = self.ocr.classification(image_bytes)
-                process_result(text_raw, "ddddocr-Raw")
-
             except Exception as e:
                 log_error(f"[{task_id}] ddddocr 识别异常: {str(e)}")
 

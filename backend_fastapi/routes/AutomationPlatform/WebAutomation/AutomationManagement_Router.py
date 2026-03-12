@@ -275,31 +275,134 @@ async def get_login_accounts(req: GetLoginAccountsRequest):
         log_info(f"Get login accounts error: {str(e)}")
         return {'code': 500, 'message': str(e)}
 
+@router.get('/statistics')
+async def get_automation_statistics(db: AsyncSession = Depends(get_automation_db)):
+    try:
+        # 1. Total count
+        stmt_all = select(func.count(AutomationProject.id)).where(AutomationProject.del_flag == 0)
+        total_result = await db.execute(stmt_all)
+        total_count = total_result.scalar() or 0
+        
+        # 2. Status counts
+        stmt_status = select(AutomationProject.status, func.count(AutomationProject.id)).where(AutomationProject.del_flag == 0).group_by(AutomationProject.status)
+        result_status = await db.execute(stmt_status)
+        status_stats = result_status.all()
+        status_data = {s[0]: s[1] for s in status_stats if s[0]}
+        
+        # 3. Product counts
+        # Join with Project table to get product_package_name
+        stmt_product = select(
+            Project.product_package_name, 
+            func.count(AutomationProject.id)
+        ).join(
+            Project, AutomationProject.project_id == Project.id
+        ).where(
+            AutomationProject.del_flag == 0
+        ).group_by(
+            Project.product_package_name
+        )
+        result_product = await db.execute(stmt_product)
+        product_stats = result_product.all()
+        
+        products_data = []
+        for p in product_stats:
+            if p[0]:
+                products_data.append({
+                    "product_name": p[0],
+                    "count": p[1]
+                })
+        
+        data = {
+            "all": total_count,
+            "pending": status_data.get('待执行', 0) + status_data.get('Pending', 0) + status_data.get('pending', 0),
+            "running": status_data.get('Running', 0) + status_data.get('running', 0),
+            "passed": status_data.get('passed', 0) + status_data.get('Passed', 0) + status_data.get('success', 0) + status_data.get('Success', 0),
+            "failed": status_data.get('failed', 0) + status_data.get('Failed', 0),
+            "products": products_data
+        }
+        
+        return {'code': 200, 'message': 'Success', 'data': data}
+    except Exception as e:
+        log_info(f"Get automation statistics error: {str(e)}")
+        return {'code': 500, 'message': str(e), 'data': {'all': 0, 'pending': 0, 'running': 0, 'passed': 0, 'failed': 0, 'products': []}}
+
+@router.get('/test_projects/options')
+async def get_test_project_options(db: AsyncSession = Depends(get_automation_db)):
+    try:
+        stmt = select(AutomationProject.id, AutomationProject.process_name).where(AutomationProject.del_flag == 0)
+        result = await db.execute(stmt)
+        rows = result.all()
+        return {
+            'code': 200,
+            'msg': 'success',
+            'data': [{'id': row.id, 'process_name': row.process_name} for row in rows]
+        }
+    except Exception as e:
+        log_info(f"Get test project options error: {str(e)}")
+        return {'code': 500, 'msg': str(e), 'data': []}
+
+@router.get('/test_projects/creators')
+async def get_test_project_creators(db: AsyncSession = Depends(get_automation_db)):
+    try:
+        stmt = select(AutomationProject.created_by).where(AutomationProject.del_flag == 0).distinct()
+        result = await db.execute(stmt)
+        rows = result.all()
+        return {
+            'code': 200,
+            'msg': 'success',
+            'data': [row.created_by for row in rows if row.created_by]
+        }
+    except Exception as e:
+        log_info(f"Get test project creators error: {str(e)}")
+        return {'code': 500, 'msg': str(e), 'data': []}
+
 @router.get('/test_projects')
 async def get_projects(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1),
     process_name: Optional[str] = None,
     status: Optional[str] = None,
+    level: Optional[str] = None,
     product_names: Optional[str] = None,
     environment: Optional[str] = None,
+    des_status: Optional[str] = None,
+    created_by: Optional[str] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
     db: AsyncSession = Depends(get_automation_db)
 ):
     try:
         stmt = select(AutomationProject, Project).outerjoin(
             Project, AutomationProject.project_id == Project.id
-        )
+        ).where(AutomationProject.del_flag == 0)
         
         if process_name:
-            stmt = stmt.where(AutomationProject.process_name.like(f'%{process_name}%'))
+            process_list = process_name.split(',')
+            # Use OR condition for multiple process names
+            conditions = [AutomationProject.process_name.like(f'%{name}%') for name in process_list]
+            stmt = stmt.where(or_(*conditions))
+            
         if status:
             status_list = status.split(',')
             stmt = stmt.where(AutomationProject.status.in_(status_list))
+        if level:
+            level_list = level.split(',')
+            stmt = stmt.where(AutomationProject.level.in_(level_list))
         if product_names:
             name_list = product_names.split(',')
             stmt = stmt.where(Project.product_package_name.in_(name_list))
         if environment:
             stmt = stmt.where(Project.environment == environment)
+        if des_status:
+            des_status_list = des_status.split(',')
+            stmt = stmt.where(AutomationProject.des_status.in_(des_status_list))
+        if created_by:
+            created_by_list = created_by.split(',')
+            stmt = stmt.where(AutomationProject.created_by.in_(created_by_list))
+        if start_time:
+            stmt = stmt.where(AutomationProject.start_time >= start_time)
+        if end_time:
+            stmt = stmt.where(AutomationProject.end_time <= end_time)
             
         stmt = stmt.order_by(desc(AutomationProject.updated_at))
         
@@ -342,8 +445,10 @@ async def get_projects(
 
             if p:
                 ap_dict['project_info'] = p.to_dict()
+                # Merge level from automation project to project info for easier frontend grouping
+                ap_dict['project_info']['level'] = ap_dict.get('level', 'P0')
             else:
-                ap_dict['project_info'] = {}
+                ap_dict['project_info'] = {'level': ap_dict.get('level', 'P0')}
             projects.append(ap_dict)
             
         return {
@@ -415,6 +520,7 @@ async def create_project(
 
         new_project = AutomationProject(
             process_name=req.process_name,
+            level=req.level,
             product_ids=product_ids_str,
             system=req.system,
             product_type=req.product_type,
@@ -427,7 +533,11 @@ async def create_project(
             assertion_config=to_json(req.assertion_config),
             screenshot_config=to_json(req.screenshot_config),
             status='待执行',
-            created_by=req.created_by
+            des_status=req.des_status,
+            created_by=req.created_by,
+            start_time=req.start_time,
+            end_time=req.end_time,
+            del_flag=0
         )
         
         db.add(new_project)
@@ -497,6 +607,7 @@ async def update_project(
             return {'code': 404, 'message': '项目未找到'}
             
         if req.process_name is not None: project.process_name = req.process_name
+        if req.level is not None: project.level = req.level
         
         if req.product_ids is not None:
             if isinstance(req.product_ids, list):
@@ -527,6 +638,9 @@ async def update_project(
         if req.tab_switch_config is not None: project.tab_switch_config = to_json(req.tab_switch_config)
         if req.assertion_config is not None: project.assertion_config = to_json(req.assertion_config)
         if req.screenshot_config is not None: project.screenshot_config = to_json(req.screenshot_config)
+        if req.des_status is not None: project.des_status = req.des_status
+        if req.start_time is not None: project.start_time = req.start_time
+        if req.end_time is not None: project.end_time = req.end_time
         
         await db.commit()
         
@@ -588,73 +702,25 @@ async def update_project(
         log_info(f"Update project error: {str(e)}")
         return {'code': 500, 'message': str(e)}
 
-@router.delete('/test_projects/{project_id}')
-async def delete_project(
-    project_id: int,
-    db: AsyncSession = Depends(get_automation_db)
-):
+@router.delete("/test_projects/{id}")
+async def delete_project(id: int, db: AsyncSession = Depends(get_automation_db)):
     try:
-        stmt = select(AutomationProject).where(AutomationProject.id == project_id)
+        stmt = select(AutomationProject).where(AutomationProject.id == id)
         result = await db.execute(stmt)
         project = result.scalar_one_or_none()
         
         if not project:
-            return {'code': 404, 'message': '项目未找到'}
+            return {'code': 404, 'msg': 'Project not found', 'data': None}
             
-        # Delete executions
-        try:
-            stmt = select(AutomationExecution).where(AutomationExecution.project_id == project_id)
-            result = await db.execute(stmt)
-            executions = result.scalars().all()
-            
-            for execution in executions:
-                stmt_log = select(AutomationExecutMethodLog).where(AutomationExecutMethodLog.execution_id == execution.id)
-                res_log = await db.execute(stmt_log)
-                logs = res_log.scalars().all()
-                for log in logs:
-                    await db.delete(log)
-                await db.delete(execution)
-        except Exception as e:
-            log_info(f"Error deleting execution records: {str(e)}")
-            
-        # Delete file
-        try:
-            stmt = select(ProjectFile).where(ProjectFile.project_id == project_id)
-            result = await db.execute(stmt)
-            project_file = result.scalar_one_or_none()
-            
-            paths_to_check = []
-            root_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-            if project_file and project_file.file_path:
-                paths_to_check.append(project_file.file_path)
-                if not os.path.isabs(project_file.file_path):
-                     paths_to_check.append(os.path.join(root_path, project_file.file_path))
-                     
-            generated_path, _ = await generate_test_case_path(project, db)
-            paths_to_check.append(generated_path)
-            
-            unique_paths = list(set(paths_to_check))
-            for path in unique_paths:
-                if path and os.path.exists(path):
-                    try:
-                        os.remove(path)
-                        log_info(f"Deleted test file: {path}")
-                    except: pass
-            
-            if project_file:
-                await db.delete(project_file)
-        except Exception as e:
-            log_info(f"Error deleting file: {str(e)}")
-            
-        await db.delete(project)
+        # Soft delete: set del_flag to 1
+        project.del_flag = 1
         await db.commit()
         
-        return {'code': 200, 'message': '项目已删除'}
+        return {'code': 200, 'msg': 'Project deleted successfully', 'data': None}
     except Exception as e:
         await db.rollback()
         log_info(f"Delete project error: {str(e)}")
-        return {'code': 500, 'message': str(e)}
+        return {'code': 500, 'msg': str(e), 'data': None}
 
 @router.post('/test_projects/{project_id}/execute')
 async def execute_project(

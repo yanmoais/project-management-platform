@@ -115,48 +115,106 @@ async def test_HG(browser_args):
                         raise e
                 time.sleep(1)
 
-            # 测试步骤3 & 4: 验证码智能重试 (输入验证码 + 点击登录)
-            with allure.step("测试步骤3-4: 验证码识别与登录 (智能重试)"):
-                log_info(f"[{task_id}] 开始测试步骤3-4: 验证码识别与登录 (智能重试)")
-                log_info(f"[{task_id}] 开始验证码智能重试流程 (最大3次)")
-                
-                captcha_retry_success = False
-                for captcha_attempt in range(3):
+            # 测试步骤3: 输入验证码 (操作次数: 1)
+            with allure.step("测试步骤3: 输入验证码"):
+                log_info(f"[{task_id}] 开始测试步骤3 输入验证码 的操作==============")
+
+                # 公共断言方法，断言元素是否存在
+                with allure.step("[{task_id}] 测试步骤3: 公共断言元素是否存在"):
+                    await ui_operations.elem_assert_exists("//*[@alt='验证码']")
+
+                # 执行Web元素操作 1 次
+                for attempt in range(1):
+                    # 检查浏览器是否已关闭
+                    if await ui_operations.is_browser_closed():
+                        log_info(f"[{task_id}] 检测到浏览器已关闭，测试被用户中断")
+                        raise Exception("BROWSER_CLOSED_BY_USER")
+                    
                     try:
-                        log_info(f"[{task_id}] 第 {captcha_attempt + 1} 次尝试验证码流程")
-                        
-                        # 1. 识别验证码
-                        log_info(f"[{task_id}] 开始识别验证码: //*[@alt='验证码']")
-                        await ui_operations.elem_solve_captcha("//*[@alt='验证码']", "//*[@placeholder='验证码']")
+                        log_info(f"[{task_id}] 执行第{attempt + 1}次操作: solve_captcha")
+
+                        # 验证码智能重试流程 (最大3次)
+                        captcha_retry_success = False
+                        for captcha_attempt in range(3):
+                            try:
+                                log_info(f"[{task_id}] 第 {captcha_attempt + 1} 次尝试验证码流程")
+                                
+                                # 1. 识别验证码
+                                log_info(f"[{task_id}] 开始识别验证码: //*[@alt='验证码']")
+                                await ui_operations.elem_solve_captcha("//*[@alt='验证码']", "//*[@placeholder='验证码']")
+                                time.sleep(1)
+                                
+                                # 2. 执行登录操作
+                                log_info(f"[{task_id}] 执行登录操作: click ")
+                                await ui_operations.elem_click("")
+                                
+                                # 3. 检查结果
+                                if await ui_operations.check_captcha_result("验证码错误"):
+                                    captcha_retry_success = True
+                                    log_info(f"[{task_id}] 验证码流程成功")
+                                    break
+                                else:
+                                    log_info(f"[{task_id}] 验证码错误，准备重试")
+                                    time.sleep(2) 
+                            except Exception as e:
+                                # 浏览器关闭检查
+                                error_msg = str(e).lower()
+                                if any(keyword in error_msg for keyword in ['target closed', 'browser has been closed', 'disconnected', 'session closed']):
+                                    log_info(f"[{task_id}] 检测到浏览器连接异常，可能被用户关闭")
+                                    raise Exception("BROWSER_CLOSED_BY_USER")
+                                    
+                                log_info(f"[{task_id}] 尝试 {captcha_attempt + 1} 发生异常: {e}")
+                                if captcha_attempt == 2:
+                                    raise e
+                                time.sleep(1)
+
+                        if not captcha_retry_success:
+                            raise Exception("验证码智能重试流程失败")
+                        pass # 验证码流程已在上方执行
                         time.sleep(1)
-                        
-                        # 2. 执行下一步 (通常是登录点击)
-                        log_info(f"[{task_id}] 执行下一步操作: click //*[@type='button']")
-                        await ui_operations.elem_click("//*[@type='button']")
-                        
-                        # 3. 检查结果 (等待验证码错误提示或URL变化)
-                        if await ui_operations.check_captcha_result("验证码错误"):
-                            captcha_retry_success = True
-                            log_info(f"[{task_id}] 验证码流程成功")
-                            break
-                        else:
-                            log_info(f"[{task_id}] 验证码错误，准备重试")
-                            time.sleep(2) 
-                            
                     except Exception as e:
                         # 检查是否是浏览器关闭导致的异常
                         error_msg = str(e).lower()
                         if any(keyword in error_msg for keyword in ['target closed', 'browser has been closed', 'disconnected', 'session closed']):
                             log_info(f"[{task_id}] 检测到浏览器连接异常，可能被用户关闭")
                             raise Exception("BROWSER_CLOSED_BY_USER")
-                            
-                        log_info(f"[{task_id}] 尝试 {captcha_attempt + 1} 发生异常: {e}")
-                        if captcha_attempt == 2:
-                            raise e
-                        time.sleep(1)
+                        
+                        log_info(f"[{task_id}] 第{attempt + 1}次操作失败: {e}")
+                        if attempt == 1 - 1:
+                           log_info(f"[{task_id}] 所有操作均失败！")
+                        raise e
+                time.sleep(1)
 
-                if not captcha_retry_success:
-                    raise Exception("验证码智能重试流程失败")
+            # 测试步骤4: 点击登录 (操作次数: 1)
+            with allure.step("测试步骤4: 点击登录"):
+                log_info(f"[{task_id}] 开始测试步骤4 点击登录 的操作==============")
+
+                # 公共断言方法，断言元素是否存在
+                with allure.step("[{task_id}] 测试步骤4: 公共断言元素是否存在"):
+                    await ui_operations.elem_assert_exists("//*[@type='button']")
+
+                # 执行Web元素操作 1 次
+                for attempt in range(1):
+                    # 检查浏览器是否已关闭
+                    if await ui_operations.is_browser_closed():
+                        log_info(f"[{task_id}] 检测到浏览器已关闭，测试被用户中断")
+                        raise Exception("BROWSER_CLOSED_BY_USER")
+                    
+                    try:
+                        log_info(f"[{task_id}] 执行第{attempt + 1}次操作: click")
+                        await ui_operations.elem_click("//*[@type='button']")
+                        time.sleep(1)
+                    except Exception as e:
+                        # 检查是否是浏览器关闭导致的异常
+                        error_msg = str(e).lower()
+                        if any(keyword in error_msg for keyword in ['target closed', 'browser has been closed', 'disconnected', 'session closed']):
+                            log_info(f"[{task_id}] 检测到浏览器连接异常，可能被用户关闭")
+                            raise Exception("BROWSER_CLOSED_BY_USER")
+                        
+                        log_info(f"[{task_id}] 第{attempt + 1}次操作失败: {e}")
+                        if attempt == 1 - 1:
+                           log_info(f"[{task_id}] 所有操作均失败！")
+                        raise e
                 time.sleep(1)
 
             # 输出图片识别统计信息

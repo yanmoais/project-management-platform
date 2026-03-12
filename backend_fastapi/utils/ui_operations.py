@@ -1067,7 +1067,7 @@ class UIOperations:
                 # 降级方案：获取位置并裁剪页面截图
                 # 注意：bounding_box() 需要元素可见，如果之前滚动失败可能获取不到，但值得一试
                 box = None
-                max_bounding_box_retries = 3
+                max_bounding_box_retries = 10
                 for attempt in range(max_bounding_box_retries):
                     try:
                         box = await locator.bounding_box()
@@ -1091,11 +1091,32 @@ class UIOperations:
             if not image_bytes:
                  raise Exception("获取验证码图片失败")
 
-            # 3. 识别
-            result = self.captcha_solver.solve_arithmetic(image_bytes,self.task_id)
+            # 3. 识别 (带内部重试)
+            result = None
+            max_solve_retries = 10
+            
+            for solve_attempt in range(max_solve_retries):
+                # 如果不是第一次，先刷新验证码
+                if solve_attempt > 0:
+                    log_info(f"[{self.task_id}] 验证码识别失败 (尝试 {solve_attempt}/{max_solve_retries})，尝试点击图片刷新并重试")
+                    try:
+                        # 使用 force=True 强制点击，避免元素被遮挡或不可点击
+                        await locator.click(force=True, timeout=3000)
+                        await asyncio.sleep(1.5) # 等待刷新
+                        # 重新截图
+                        image_bytes = await locator.screenshot(type='png', timeout=5000, animations="disabled")
+                    except Exception as refresh_err:
+                        log_info(f"[{self.task_id}] 刷新验证码失败: {refresh_err}")
+                        continue
+
+                # 尝试识别
+                if image_bytes:
+                    result = self.captcha_solver.solve_arithmetic(image_bytes, self.task_id)
+                    if result:
+                        break # 识别成功，跳出循环
             
             if not result:
-                raise Exception("CAPTCHA_SOLVE_FAILED")
+                raise Exception(f"CAPTCHA_SOLVE_FAILED (Tried {max_solve_retries} times)")
             
             log_info(f"[{self.task_id}] 验证码识别成功: {result}")
             
@@ -1109,18 +1130,27 @@ class UIOperations:
             log_info(f"[{self.task_id}] 验证码识别失败")
             raise Exception(f"CAPTCHA_SOLVE_ERROR: {e}")
 
-    async def check_captcha_result(self, error_text="验证码错误", timeout=5):
+    async def check_captcha_result(self, error_text=None, timeout=5):
         """
         检查验证码是否正确
-        :param error_text: 错误提示文本
+        :param error_text: 错误提示文本，支持字符串或列表，默认包含"验证码错误"和"验证码已失效"
         :param timeout: 等待错误提示的超时时间
         :return: True if success (no error toast or url changed), False if error toast found
         """
+        if error_text is None:
+            error_text = ["验证码错误", "验证码已失效"]
+        
+        if isinstance(error_text, str):
+            error_text = [error_text]
+
         start_url = self.page.url
         try:
             # 尝试等待错误提示可见
             # 使用 xpath 查找包含特定文本的元素，且要是可见的
-            toast_locator = self.page.locator(f"//*[contains(text(), '{error_text}')]")
+            conditions = [f"contains(text(), '{text}')" for text in error_text]
+            xpath = f"//*[{' or '.join(conditions)}]"
+            
+            toast_locator = self.page.locator(xpath)
             
             await toast_locator.wait_for(state='visible', timeout=timeout * 1000)
             
@@ -1457,23 +1487,86 @@ class UIOperations:
             log_info(f"[{self.task_id}] 元素是否存在断言失败: {element},请检查元素格式！")
             raise e
     
+    # 元素不存在断言
+    async def elem_assert_not_exists(self, element, timeout=5000):
+        """
+        断言元素不存在（在指定超时时间内不可见或不存在）
+        :param element: 元素定位器
+        :param timeout: 超时时间（毫秒），默认为5秒（比常规断言短，以便快速失败）
+        """
+        try:
+            locator = self.locator_element(element)
+            
+            # 使用 playwright 的 expect(locator).to_be_hidden()
+            # to_be_hidden 会在元素不存在 或 存在但不可见 时通过
+            await asyncio.wait_for(
+                expect(locator).to_be_hidden(timeout=timeout),
+                timeout=timeout/1000 + 2
+            )
+            log_info(f"[{self.task_id}] 元素不存在断言成功: {element}")
+            return True
+            
+        except asyncio.TimeoutError:
+            log_info(f"[{self.task_id}] 元素不存在断言超时（元素依然存在/可见）: {element}")
+            raise Exception(f"ELEMENT_NOT_EXISTS_TIMEOUT: 元素 {element} 依然存在或可见")
+        except Exception as e:
+            error_msg = str(e).lower()
+            if any(keyword in error_msg for keyword in ['target closed', 'browser has been closed', 'disconnected', 'session closed']):
+                log_info(f"[{self.task_id}] 检测到浏览器连接异常，元素不存在断言失败: {element}")
+                raise Exception("BROWSER_CLOSED_BY_USER")
+            log_info(f"[{self.task_id}] 元素不存在断言失败: {element}, 错误: {e}")
+            raise e
+
     # URL是否存在
     async def url_assert_exists(self, url, timeout=30000):
         try:
-            await asyncio.wait_for(
-                expect(self.page).to_have_url(url, timeout=timeout),
-                timeout=timeout/1000 + 5
-            )
-            log_info(f"[{self.task_id}] URL是否存在断言成功: {url}")
-        except asyncio.TimeoutError:
-            log_info(f"[{self.task_id}] URL是否存在断言超时: {url}")
-            raise Exception(f"URL_ASSERT_TIMEOUT: {url}")
+            # 支持多标签页匹配：遍历所有打开的页面，检查是否有任意页面的 URL 包含目标字符串
+            start_time = time.time()
+            context = self.page.context
+            
+            while time.time() - start_time < timeout / 1000:
+                # 获取当前所有未关闭的页面
+                pages = [p for p in context.pages if not p.is_closed()]
+                
+                # 优先检查当前激活的页面 (self.page)
+                if not self.page.is_closed() and url in self.page.url:
+                    log_info(f"[{self.task_id}] URL是否存在断言成功(包含匹配): {url} (当前页面)")
+                    return True
+                
+                # 如果当前页面不匹配，遍历其他所有页面
+                for page in pages:
+                    try:
+                        if url in page.url:
+                            # 找到匹配页面，自动切换上下文到该页面
+                            await page.bring_to_front()
+                            self.page = page
+                            log_info(f"[{self.task_id}] URL是否存在断言成功(包含匹配): {url} (已切换到匹配标签页)")
+                            return True
+                    except Exception:
+                        continue
+                        
+                await asyncio.sleep(0.5)
+            
+            # 超时后收集所有页面的 URL 用于报错信息
+            all_urls = []
+            for p in context.pages:
+                try:
+                    if not p.is_closed():
+                        all_urls.append(p.url)
+                except:
+                    pass
+            
+            current_url = self.page.url if not self.page.is_closed() else "page_closed"
+            log_info(f"[{self.task_id}] URL断言超时。期望包含: {url}")
+            log_info(f"[{self.task_id}] 当前所有页面URL: {all_urls}")
+            
+            raise Exception(f"URL_ASSERT_TIMEOUT: Expected to contain '{url}', scanned {len(all_urls)} pages but none matched.")
+            
         except Exception as e:
             error_msg = str(e).lower()
             if any(keyword in error_msg for keyword in ['target closed', 'browser has been closed', 'disconnected', 'session closed']):
                 log_info(f"[{self.task_id}] 检测到浏览器连接异常，URL断言失败: {url}")
                 raise Exception("BROWSER_CLOSED_BY_USER")
-            log_info(f"[{self.task_id}] URL是否存在断言失败: {url},请检查URL格式！")
             raise e
 
     # 元素是否可见
@@ -1828,13 +1921,14 @@ class UIOperations:
             log_info(f"[{self.task_id}] 切换标签页失败: {e}")
             raise e
 
-    async def switch_to_tab_by_index(self, index: int, timeout: int = 10):
+    async def switch_to_tab_by_index(self, index: int, timeout: int = 10, url: str = None):
         """
         根据索引切换标签页（从1开始）
         
         Args:
             index: 目标标签页索引（1-based）
             timeout: 等待目标标签页出现的超时时间（秒）
+            url: 可选，预期的目标URL片段，用于验证切换是否正确
         """
         try:
             start_time = time.time()
@@ -1851,6 +1945,14 @@ class UIOperations:
                         await target_page.bring_to_front()
                         self.page = target_page
                         log_info(f"[{self.task_id}] 切换到标签页索引: {index}, URL: {target_page.url}")
+                        
+                        # 如果提供了URL，验证是否匹配
+                        if url and url.strip():
+                            if url not in target_page.url:
+                                log_info(f"[{self.task_id}] 警告: 切换后的页面URL ({target_page.url}) 不包含预期字符 ({url})")
+                            else:
+                                log_info(f"[{self.task_id}] 页面URL验证通过")
+                                
                         await asyncio.sleep(self.config['tab_switch_delay'])
                         return target_page
                     except Exception as e:

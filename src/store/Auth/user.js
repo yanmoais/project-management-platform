@@ -7,7 +7,8 @@ export const useUserStore = defineStore('user', {
     name: '',
     avatar: '',
     roles: [],
-    permissions: []
+    permissions: [],
+    userInfo: {}
   }),
   getters: {
     currentUser: (state) => state.name || 'Unknown'
@@ -46,6 +47,9 @@ export const useUserStore = defineStore('user', {
       try {
         const res = await getInfo()
         const { roles, name, avatar, permissions } = res.data
+        
+        this.userInfo = res.data
+
         if (!roles || roles.length <= 0) {
             this.roles = ['ROLE_DEFAULT']
         } else {

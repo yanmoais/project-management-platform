@@ -63,9 +63,14 @@ class AutomationProject(Base):
     assertion_config: Mapped[Optional[str]] = mapped_column(Text, comment='断言配置')
     screenshot_config: Mapped[Optional[str]] = mapped_column(Text, comment='截图配置')
     status: Mapped[Optional[str]] = mapped_column(String(50), default='待执行', comment='执行状态')
+    des_status: Mapped[Optional[str]] = mapped_column(String(50), default='进行中', comment='设计状态')
     created_by: Mapped[Optional[str]] = mapped_column(String(100), default='admin', comment='创建人')
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.now, comment='创建时间')
     updated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, default=datetime.now, onupdate=datetime.now, comment='更新时间')
+    del_flag: Mapped[Optional[int]] = mapped_column(Integer, default=0, comment='删除标志(0:正常,1:逻辑删除)')
+    level: Mapped[Optional[str]] = mapped_column(String(10), default='P0', comment='优先级 (P0, P1, P2, P3)')
+    start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, comment='预计开始时间')
+    end_time: Mapped[Optional[datetime]] = mapped_column(DateTime, comment='预计结束时间')
 
     def to_dict(self):
         return {
@@ -83,9 +88,14 @@ class AutomationProject(Base):
             'assertion_config': self.assertion_config,
             'screenshot_config': self.screenshot_config,
             'status': self.status,
+            'des_status': self.des_status,
             'created_by': self.created_by,
             'created_at': self.created_at.strftime('%Y-%m-%d %H:%M:%S') if self.created_at else None,
-            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None
+            'updated_at': self.updated_at.strftime('%Y-%m-%d %H:%M:%S') if self.updated_at else None,
+            'del_flag': self.del_flag,
+            'level': self.level,
+            'start_time': self.start_time.strftime('%Y-%m-%d %H:%M:%S') if self.start_time else None,
+            'end_time': self.end_time.strftime('%Y-%m-%d %H:%M:%S') if self.end_time else None
         }
 
 class ProjectFile(Base):
